@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
-import os.path
+from os import path as os_path
 import sqlite3
 
 from spectrum_library import SpectrumLibrary
@@ -45,7 +45,7 @@ CREATE TABLE spectrum_metadata (
     valueFloat REAL,
     valueString VARCHAR(256),
     FOREIGN KEY (specId) REFERENCES spectra(specId) ON DELETE CASCADE,
-    FOREIGN KEY (fieldId) REFERENCES spectrum_metadata(fieldId) ON DELETE CASCADE
+    FOREIGN KEY (fieldId) REFERENCES metadata_fields(fieldId) ON DELETE CASCADE
 );
     
     """
@@ -57,11 +57,11 @@ CREATE TABLE spectrum_metadata (
             self._create(path)
 
         # Check that we're not overwriting an existing library
-        assert os.path.exists(path), \
+        assert os_path.exists(path), \
             "Could not open spectrum library <{}>: directory not found".format(path)
 
         self._path = path
-        self._path_db = os.path.join(path, self._index_file_name)
+        self._path_db = os_path.join(path, self._index_file_name)
         self._db = sqlite3.connect(self._path_db)
         self._db_cursor = self._db.cursor()
 
@@ -69,12 +69,12 @@ CREATE TABLE spectrum_metadata (
 
     def _create(self, path):
         # Check that we're not overwriting an existing library
-        assert not os.path.exists(path), \
+        assert not os_path.exists(path), \
             "Could not create spectrum library <{}>: file already exists".format(path)
 
         # Check that parent directory exists
-        parent_path, file_name = os.path.split(path)
-        assert os.path.exists(parent_path), \
+        parent_path, file_name = os_path.split(path)
+        assert os_path.exists(parent_path), \
             "Could not create spectrum library <{}>: parent directory does not exist".format(path)
 
         # Create directory to hold spectra in this library
@@ -84,7 +84,7 @@ CREATE TABLE spectrum_metadata (
             raise
 
         # Create SQLite database to hold metadata about these spectra
-        db_path = os.path.join(path, self._index_file_name)
+        db_path = os_path.join(path, self._index_file_name)
         db = sqlite3.connect(db_path)
         c = db.cursor()
         c.executescript(self._schema)
