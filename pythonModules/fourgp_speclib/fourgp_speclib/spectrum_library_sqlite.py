@@ -62,7 +62,7 @@ CREATE TABLE spectrum_metadata (
 
         self._path = path
         self._path_db = os.path.join(path, self._index_file_name)
-        self._db = sqlite3.open(self._path_db)
+        self._db = sqlite3.connect(self._path_db)
         self._db_cursor = self._db.cursor()
 
         super(SpectrumLibrarySqlite, self).__init__(*args, **kwargs)
@@ -94,4 +94,4 @@ CREATE TABLE spectrum_metadata (
     def refresh_database(self):
         self._db.commit()
         self._db.close()
-        self._db = sqlite3.open(self._path_db)
+        self._db = sqlite3.connect(self._path_db)

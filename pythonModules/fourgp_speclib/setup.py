@@ -21,10 +21,10 @@ def read(filename):
 # Get the version information.
 here = path.abspath(path.dirname(__file__))
 vre = re_compile("__version__ = \"(.*?)\"")
-version = vre.findall(read(path.join(here, "4gp_speclib", "__init__.py")))[0]
+version = vre.findall(read(path.join(here, "fourgp_speclib", "__init__.py")))[0]
 
 setup(
-    name="4gp_speclib",
+    name="fourgp_speclib",
     version=version,
     author="Dominic Ford",
     author_email="dominic@astro.lu.se",
