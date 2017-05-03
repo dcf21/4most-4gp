@@ -3,8 +3,12 @@
 
 import os
 from os import path as os_path
+import hashlib
+import logging
 
 from spectrum_library import SpectrumLibrary, requires_ids_or_filenames
+
+logger = logging.getLogger(__name__)
 
 
 class SpectrumLibrarySql(SpectrumLibrary):
@@ -65,7 +69,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
 
     def __init__(self, path, create=False):
         """
-        Create a new SpectrumLibrary object, storing metadata about the spectra in an SQLite database.
+        Create a new SpectrumLibrary object, storing metadata about the spectra in an SQL database.
         
         :param path:
             The file path to use for storing spectra.
@@ -92,11 +96,25 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         self._path = path
         self._db, self._db_cursor = self._open_database()
 
-        # Look up numeric Id for this particular spectrum library in the database
-        # Some SQL implementations (e.g. MySQL) share multiple spectrum libraries in a single database. Others
-        # (e.g. SQLite) have a separate database for each spectrum library
-        self._unique_id = open(os_path.join(self._path, "unique_id")).read()
-        self._library_id = self._fetch_library_id(self._unique_id)
+        try:
+            # Check that this library uses the right flavour of SQL
+            with open(os_path.join(self._path, "type_id"), "w") as f:
+                expected_library_type = type(self).__name__
+                library_type = f.read()
+                assert library_type == expected_library_type, \
+                    "This library was created with class <%{}>. Cannot open with class <{}>.".format(
+                        library_type, expected_library_type)
+
+            # Look up numeric Id for this particular spectrum library in the database
+            # Some SQL implementations (e.g. MySQL) share multiple spectrum libraries in a single database. Others
+            # (e.g. SQLite) have a separate database for each spectrum library
+            with open(os_path.join(self._path, "unique_id")) as f:
+                self._unique_id = f.read()
+                self._library_id = self._fetch_library_id(self._unique_id, False)
+
+        except IOError:
+            logger.error("Spectrum library did not have required header files.")
+            raise
 
         # Initialise
         self._metadata_init()
@@ -132,7 +150,18 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         except IOError:
             raise
 
-        # Create SQLite database to hold metadata about these spectra
+        # Record the database format used by this library
+        with open(os_path.join(self._path, "type_id"), "w") as f:
+            library_type = type(self).__name__
+            f.write(library_type)
+
+        # Create a random unique id for this library
+        with open(os_path.join(self._path, "unique_id"), "w") as f:
+            unique_id = hashlib.md5(os.urandom(32).encode('hex')).hexdigest()
+            self._library_id = self._fetch_library_id(self._unique_id, True)
+            f.write(unique_id)
+
+        # Create SQL database to hold metadata about these spectra
         self._create_database()
 
     def _open_database(self):
@@ -159,8 +188,9 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
                                   "implementation")
 
     def refresh_database(self):
-        raise NotImplementedError("The refresh_database method must be implemented separately for each SQL "
-                                  "implementation")
+        self._db.commit()
+        self._db.close()
+        self._open_database()
 
     def __str__(self):
         return "<{module}.{name} instance with path <{path}>".format(module=self.__module__,
@@ -181,7 +211,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         for item in self._db_cursor:
             self._metadata_fields.append(item['name'])
 
-    def _fetch_library_id(self, name):
+    def _fetch_library_id(self, name, add_record=False):
         """
         Look up the database internal id used to represent a particular spectrum library.
         
@@ -191,6 +221,13 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         :type name:
             str
             
+        :param add_record:
+            If true, this is a new library that we are expecting to add to the database. If false, we expect this
+            library to already exist.
+            
+        :type add_record:
+            bool
+            
         :return:
             Integer origin id.
         """
@@ -199,11 +236,19 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             # Look up whether this origin name already exists in the database
             self._db_cursor.execute("SELECT libraryId FROM libraries WHERE name=%s;", (name,))
             results = self._db_cursor.fetchall()
+
+            assert not (bool(results) and add_record), \
+                "Attempting to create a library which already exists in the database."
+
+            assert not ((not bool(results)) and (not add_record)), \
+                "Attempting to access a library which doesn't exist in the database."
+
             if results:
                 return results[0]['libraryId']
 
             # If not, add it into the database
             self._db_cursor.execute("INSERT INTO libraries (name) VALUES (%s);", (name,))
+            add_record = False
 
     def _fetch_origin_id(self, name):
         """
@@ -280,6 +325,26 @@ SELECT specId FROM spectra WHERE libraryId=%s AND filename IN %s;
             output.append(item["specId"])
         return output
 
+    def purge(self):
+        """
+        This irrevocably deletes the spectrum library from the database and from your disk. You have been warned.
+         
+        :return:
+            None
+        """
+
+        # Delete spectra
+        self._db_cursor.execute("SELECT filename FROM spectra WHERE libraryId=%s;", (self._library_id,))
+        for item in self._db_cursor:
+            os.unlink(os_path.join(self._path, item["filename"]))
+
+        # Delete id files
+        os.unlink(os_path.join(self._path, "unique_id"))
+        os.unlink(os_path.join(self._path, "type_id"))
+
+        # Delete database entries
+        self._db_cursor.execute("DELETE FROM libraries WHERE libraryId=%s;", (self._library_id,))
+
     def search(self, **kwargs):
         """
         Search for spectra within this SpectrumLibrary which fall within some metadata constraints.
@@ -334,19 +399,13 @@ EXISTS (SELECT 1
                 criteria_params.append(search_range)
 
         # Assemble our list of search criteria into an SQL query
-        query = "SELECT specId, filename FROM spectra WHERE {};".format(" AND ".join(criteria))
+        query = """
+SELECT s.specId, s.filename, o.name AS origin
+FROM spectra s
+INNER JOIN origins o ON s.originId = o.originId
+WHERE {};""".format(" AND ".join(criteria))
         self._db_cursor.execute(query, criteria_params)
         return self._db_cursor.fetchall()
-
-    def list_metadata_fields(self):
-        """
-        List all of the metadata fields set on spectra in this spectrum library.
-        
-        :return:
-            List of strings
-        """
-
-        return self._metadata_fields
 
     @requires_ids_or_filenames
     def get_metadata(self, ids=None, filenames=None):

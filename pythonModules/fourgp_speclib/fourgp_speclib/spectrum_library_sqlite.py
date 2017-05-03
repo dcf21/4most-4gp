@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
 from os import path as os_path
 import sqlite3
 
@@ -31,17 +32,15 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
         :type create:
             bool
         """
+
+        self._db = None
+        self._db_cursor = None
+
         super(SpectrumLibrarySqlite, self).__init__(path=path, create=create)
 
     def _create_database(self):
         """
-        Create a new, empty spectrum library.
-        
-        :param path:
-            The file path to use for storing spectra in this library.
-            
-        :type path:
-            str
+        Create a database record for a new, empty spectrum library.
             
         :return:
             None
@@ -49,6 +48,10 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
 
         # Create SQLite database to hold metadata about the spectra in this library
         db_path = os_path.join(self._path, self._index_file_name)
+
+        assert not os_path.exists(db_path),\
+            "Attempting to overwrite SQLite database <{}> that already exists.".format(db_path)
+
         db = sqlite3.connect(db_path)
         c = db.cursor()
         c.executescript(self._schema)
@@ -58,11 +61,24 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
 
     def _open_database(self):
         self._path_db = os_path.join(self._path, self._index_file_name)
+
+        assert os_path.exists(self._path_db),\
+            "Attempting to open an SQLite database <{}> that doesn't exist.".format(db_path)
+
         self._db = sqlite3.connect(self._path_db)
         self._db_cursor = self._db.cursor()
-        return (self._db, self._db_cursor)
+        return self._db, self._db_cursor
 
-    def refresh_database(self):
-        self._db.commit()
+    def purge(self):
+        """
+        This irrevocably deletes the spectrum library from the database and from your disk. You have been warned.
+         
+        :return:
+            None
+        """
+
+        super(SpectrumLibrarySqlite, self).purge()
+
+        # Delete SQLite file
         self._db.close()
-        self._db = sqlite3.connect(self._path_db)
+        os.unlink(os_path.join(self._path_db))
