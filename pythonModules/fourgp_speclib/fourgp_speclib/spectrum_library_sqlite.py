@@ -11,6 +11,9 @@ from spectrum_library_sql import SpectrumLibrarySql
 class SpectrumLibrarySqlite(SpectrumLibrarySql):
     """
     A spectrum library implementation that uses SQLite3 to store metadata about each spectrum.
+    
+    :cvar string _index_file_name:
+        The filename used to store the SQLite database within the directory holding this SpectrumLibrary.
     """
 
     _index_file_name = "index.db"

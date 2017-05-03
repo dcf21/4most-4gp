@@ -10,6 +10,18 @@ from spectrum_library_sql import SpectrumLibrarySQL
 class SpectrumLibraryMySql(SpectrumLibrarySQL):
     """
     A spectrum library implementation that uses MySQL to store metadata about each spectrum.
+    
+    :ivar string _db_user:
+            Username for connecting to MySQL server
+            
+    :ivar string _db_passwd:
+        Password for connecting into MySQL server
+        
+    :ivar string _db_name:
+        Name of the database to use on the MySQL server
+        
+    :ivar string _db_host:
+        Hostname of the MySQL server
     """
 
     def __init__(self, path, create=False, db_user="fourgp", db_passwd="fourgp", db_name="fourgp", db_host="localhost"):

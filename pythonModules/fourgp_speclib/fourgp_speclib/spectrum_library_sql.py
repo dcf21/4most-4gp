@@ -14,6 +14,24 @@ logger = logging.getLogger(__name__)
 class SpectrumLibrarySql(SpectrumLibrary):
     """
     A spectrum library implementation that uses SQL database to store metadata about each spectrum.
+    
+    :cvar string _schema:
+        The SQL schema used for storing SpectrumLibraries
+        
+    :ivar _db:
+        Database handle object
+        
+    :ivar _db_cursor:
+        Database cursor object
+        
+    :ivar _path:
+        Path to the directory where this SpectrumLibrary is stored on disk
+        
+    :ivar _unique_id:
+        The unique string identifier used to identify this SpectrumLibrary in the <libraries> table in the database
+        
+    :ivar _library_id:
+        The numerical identifier for this SpectrumLibrary in the <libraries> table in the database
     """
 
     _schema = """

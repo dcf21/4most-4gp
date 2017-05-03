@@ -32,6 +32,9 @@ def requires_ids_or_filenames(method):
 class SpectrumLibrary(object):
     """
     An abstract spectrum library object
+    
+    :ivar list[string] _metadata_fields:
+        A list of the metadata fields set on spectra in this SpectrumLibrary
     """
 
     def __init__(self):
