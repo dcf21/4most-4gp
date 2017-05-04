@@ -24,12 +24,13 @@ def hash_numpy_array(item):
         String hash
     """
     raw = item.view(np.uint8)
-    hashlib.sha1(raw).hexdigest()
+    return hashlib.sha1(raw).hexdigest()
 
 
 def requires_common_raster(method):
     """
-    A decorator for spectrum methods that require an other spectrum to be sampled on the same wavelength raster as us.
+    A decorator for spectrum methods that require that another spectrum as an input and require it to be sampled on the
+    same wavelength raster as us.
 
     :param method:
         A method belonging to a sub-class of Spectrum.
@@ -52,11 +53,11 @@ class Spectrum(object):
     :ivar np.ndarray wavelengths:
         A 1D array listing the wavelengths at which this array of spectra are sampled.
         
-    :ivar np.ndarray fluxes:
-        A 1D array listing the flux measurements in this spectrum.
+    :ivar np.ndarray values:
+        A 1D array listing the value measurements in this spectrum.
         
-    :ivar np.ndarray flux_errors:
-        A 1D array listing the standard errors in the flux measurements.
+    :ivar np.ndarray value_errors:
+        A 1D array listing the standard errors in the value measurements.
         
     :ivar np.ndarray mask:
         A 1D array listing which wavelength samples we've currently selected to use.
@@ -68,22 +69,22 @@ class Spectrum(object):
         A string hash of the wavelength raster, used to quickly check whether spectra are sampled on a common raster.
     """
 
-    def __init__(self, wavelengths, fluxes, flux_errors):
+    def __init__(self, wavelengths, values, value_errors):
         """
         Instantiate a new Spectrum object.
         
         :param wavelengths: 
             A 1D array listing the wavelengths at which this array of spectra are sampled.
         
-        :param fluxes: 
-            A 2D array listing the flux measurements for each spectrum in this SpectrumArray.
+        :param values: 
+            A 2D array listing the value measurements for each spectrum in this SpectrumArray.
             
-        :param flux_errors: 
-            A 2D array listing the standard errors in the flux measurements for each spectrum in this SpectrumArray.
+        :param value_errors: 
+            A 2D array listing the standard errors in the value measurements for each spectrum in this SpectrumArray.
         """
         self.wavelengths = wavelengths
-        self.fluxes = fluxes
-        self.flux_errors = flux_errors
+        self.values = values
+        self.value_errors = value_errors
         self.mask = np.ones_like(self.wavelengths)
         self.mask_set = False
 
@@ -176,7 +177,7 @@ class Spectrum(object):
     @requires_common_raster
     def __add__(self, other):
         """
-        Add the fluxes in another spectrum to the fluxes in this one, and return a new Spectrum object.
+        Add the values in another spectrum to the values in this one, and return a new Spectrum object.
         
         :param other:
             The Spectrum object to add to this one.
@@ -188,20 +189,21 @@ class Spectrum(object):
             Spectrum object containing the sum of the two spectra.
         """
 
-        new_flux_errors = np.hypot(self.flux_errors, other.flux_errors)
+        new_value_errors = np.hypot(self.value_errors, other.value_errors)
 
         if not (self.mask_set or other.mask_set):
-            new_flux = self.fluxes + other.fluxes
+            new_values = self.values + other.values
         else:
-            new_flux = self.fluxes * self.mask + other.fluxes * other.mask
-            new_flux_errors[~(self.mask * other.mask)] = np.inf
+            new_values = self.values * self.mask + other.values * other.mask
+            self.mask *= other.mask
+            new_value_errors[~self.mask] = np.inf
 
-        return Spectrum(wavelengths=self.wavelengths, fluxes=new_flux, flux_errors=new_flux_errors)
+        return Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
 
     @requires_common_raster
     def __sub__(self, other):
         """
-        Subtract the fluxes in another spectrum from the fluxes in this one, and return a new Spectrum object.
+        Subtract the values in another spectrum from the values in this one, and return a new Spectrum object.
         
         :param other:
             The Spectrum object to subtract from this one.
@@ -213,20 +215,21 @@ class Spectrum(object):
             Spectrum object containing the difference of the two spectra.
         """
 
-        new_flux_errors = np.hypot(self.flux_errors, other.flux_errors)
+        new_value_errors = np.hypot(self.value_errors, other.value_errors)
 
         if not (self.mask_set or other.mask_set):
-            new_flux = self.fluxes - other.fluxes
+            new_values = self.values - other.values
         else:
-            new_flux = self.fluxes * self.mask - other.fluxes * other.mask
-            new_flux_errors[~(self.mask * other.mask)] = np.inf
+            new_values = self.values * self.mask - other.values * other.mask
+            self.mask *= other.mask
+            new_value_errors[~self.mask] = np.inf
 
-        return Spectrum(wavelengths=self.wavelengths, fluxes=new_flux, flux_errors=new_flux_errors)
+        return Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
 
     @requires_common_raster
     def __iadd__(self, other):
         """
-        Add the fluxes in another spectrum to the fluxes in this one.
+        Add the values in another spectrum to the values in this one.
         
         :param other:
             The Spectrum object to add to this one.
@@ -238,20 +241,21 @@ class Spectrum(object):
             self
         """
 
-        self.flux_errors = np.hypot(self.flux_errors, other.flux_errors)
+        self.value_errors = np.hypot(self.value_errors, other.value_errors)
 
         if not (self.mask_set or other.mask_set):
-            self.fluxes = self.fluxes + other.fluxes
+            self.values = self.values + other.values
         else:
-            self.fluxes = self.fluxes * self.mask + other.fluxes * other.mask
-            self.flux_errors[~(self.mask * other.mask)] = np.inf
+            self.values = self.values * self.mask + other.values * other.mask
+            self.mask *= other.mask
+            self.value_errors[~self.mask] = np.inf
 
         return self
 
     @requires_common_raster
     def __isub__(self, other):
         """
-        Subtract the fluxes in another spectrum from the fluxes in this one.
+        Subtract the values in another spectrum from the values in this one.
         
         :param other:
             The Spectrum object to subtract from this one.
@@ -263,20 +267,21 @@ class Spectrum(object):
             self
         """
 
-        self.flux_errors = np.hypot(self.flux_errors, other.flux_errors)
+        self.value_errors = np.hypot(self.value_errors, other.value_errors)
 
         if not (self.mask_set or other.mask_set):
-            self.flux = self.fluxes - other.fluxes
+            self.value = self.values - other.values
         else:
-            self.flux = self.fluxes * self.mask - other.fluxes * other.mask
-            self.flux_errors[~(self.mask * other.mask)] = np.inf
+            self.value = self.values * self.mask - other.values * other.mask
+            self.mask *= other.mask
+            self.value_errors[~self.mask] = np.inf
 
         return self
 
     @requires_common_raster
     def __mul__(self, other):
         """
-        Multiply the fluxes in another spectrum by the fluxes in this one, and return a new Spectrum object.
+        Multiply the values in another spectrum by the values in this one, and return a new Spectrum object.
         
         :param other:
             The Spectrum object to multiply by this one.
@@ -289,21 +294,23 @@ class Spectrum(object):
         """
 
         if not (self.mask_set or other.mask_set):
-            new_flux = self.fluxes * other.fluxes
+            new_values = self.values * other.values
         else:
-            new_flux = self.fluxes * self.mask * other.fluxes * other.mask
+            new_values = self.values * self.mask * other.values * other.mask
 
-        new_flux_errors = np.hypot(self.flux_errors / self.fluxes, other.flux_errors / other.fluxes) * np.abs(new_flux)
+        new_value_errors = np.hypot(self.value_errors / self.values, other.value_errors / other.values) * \
+                           np.abs(new_values)
 
         if self.mask_set or other.mask_set:
-            new_flux_errors[~(self.mask * other.mask)] = np.inf
+            self.mask *= other.mask
+            new_value_errors[~self.mask] = np.inf
 
-        return Spectrum(wavelengths=self.wavelengths, fluxes=new_flux, flux_errors=new_flux_errors)
+        return Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
 
     @requires_common_raster
     def __div__(self, other):
         """
-        Divide the fluxes in this spectrum by the fluxes in another one, and return a new Spectrum object.
+        Divide the values in this spectrum by the values in another one, and return a new Spectrum object.
         
         :param other:
             The Spectrum object to divide this one by.
@@ -316,24 +323,26 @@ class Spectrum(object):
         """
 
         if not (self.mask_set or other.mask_set):
-            new_flux = self.fluxes / other.fluxes
+            new_values = self.values / other.values
         else:
-            new_flux = (self.fluxes * self.mask) / (other.fluxes * other.mask)
+            new_values = (self.values * self.mask) / (other.values * other.mask)
 
-        new_flux_errors = np.hypot(self.flux_errors / self.fluxes, other.flux_errors / other.fluxes) * np.abs(new_flux)
+        new_value_errors = np.hypot(self.value_errors / self.values, other.value_errors / other.values) * \
+                           np.abs(new_values)
 
         if self.mask_set or other.mask_set:
-            new_flux_errors[~(self.mask * other.mask)] = np.inf
+            self.mask *= other.mask
+            new_value_errors[~self.mask] = np.inf
 
-        return Spectrum(wavelengths=self.wavelengths, fluxes=new_flux, flux_errors=new_flux_errors)
+        return Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
 
     @requires_common_raster
-    def __iadd__(self, other):
+    def __imul__(self, other):
         """
-        Add the fluxes in another spectrum to the fluxes in this one.
+        Multiply the values in this spectrum by the values in another.
         
         :param other:
-            The Spectrum object to add to this one.
+            The Spectrum object to multiply this one by.
             
         :type other:
             Spectrum
@@ -342,23 +351,21 @@ class Spectrum(object):
             self
         """
 
-        self.flux_errors = np.hypot(self.flux_errors, other.flux_errors)
+        new = self * other
 
-        if not (self.mask_set or other.mask_set):
-            self.fluxes = self.fluxes + other.fluxes
-        else:
-            self.fluxes = self.fluxes * self.mask + other.fluxes * other.mask
-            self.flux_errors[~(self.mask * other.mask)] = np.inf
-
+        self.values = new.values
+        self.value_errors = new.value_errors
+        self.mask = new.mask
+        self.mask_set = new.mask_set
         return self
 
     @requires_common_raster
-    def __isub__(self, other):
+    def __idiv__(self, other):
         """
-        Subtract the fluxes in another spectrum from the fluxes in this one.
+        Divide the values in this spectrum by the values in another.
         
         :param other:
-            The Spectrum object to subtract from this one.
+            The Spectrum object to divide this one by.
             
         :type other:
             Spectrum
@@ -367,12 +374,10 @@ class Spectrum(object):
             self
         """
 
-        self.flux_errors = np.hypot(self.flux_errors, other.flux_errors)
+        new = self / other
 
-        if not (self.mask_set or other.mask_set):
-            self.flux = self.fluxes - other.fluxes
-        else:
-            self.flux = self.fluxes * self.mask - other.fluxes * other.mask
-            self.flux_errors[~(self.mask * other.mask)] = np.inf
-
+        self.values = new.values
+        self.value_errors = new.value_errors
+        self.mask = new.mask
+        self.mask_set = new.mask_set
         return self

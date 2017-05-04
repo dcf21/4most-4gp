@@ -16,32 +16,32 @@ class SpectrumArray(object):
     :ivar np.ndarray wavelengths:
         A 1D array listing the wavelengths at which this array of spectra are sampled.
         
-    :ivar np.ndarray fluxes:
-        A 2D array listing the flux measurements for each spectrum in this SpectrumArray.
+    :ivar np.ndarray values:
+        A 2D array listing the value measurements for each spectrum in this SpectrumArray.
         
-    :ivar np.ndarray flux_errors:
-        A 2D array listing the standard errors in the flux measurements for each spectrum in this SpectrumArray.
+    :ivar np.ndarray value_errors:
+        A 2D array listing the standard errors in the value measurements for each spectrum in this SpectrumArray.
         
     :ivar str raster_hash:
         A string hash of the wavelength raster, used to quickly check whether spectra are sampled on a common raster.
     """
 
-    def __init__(self, wavelengths, fluxes, flux_errors):
+    def __init__(self, wavelengths, values, value_errors):
         """
         Instantiate new SpectrumArray object.
         
         :param wavelengths: 
             A 1D array listing the wavelengths at which this array of spectra are sampled.
         
-        :param fluxes: 
-            A 2D array listing the flux measurements for each spectrum in this SpectrumArray.
+        :param values: 
+            A 2D array listing the value measurements for each spectrum in this SpectrumArray.
             
-        :param flux_errors: 
-            A 2D array listing the standard errors in the flux measurements for each spectrum in this SpectrumArray.
+        :param value_errors: 
+            A 2D array listing the standard errors in the value measurements for each spectrum in this SpectrumArray.
         """
         self.wavelengths = wavelengths
-        self.fluxes = fluxes
-        self.flux_errors = flux_errors
+        self.values = values
+        self.value_errors = value_errors
         self._update_raster_hash()
 
     def __str__(self):
@@ -79,8 +79,8 @@ class SpectrumArray(object):
             Spectrum object
         """
 
-        assert 0 <= index < self.fluxes.shape[0], "Index of SpectrumArray out of range."
+        assert 0 <= index < self.values.shape[0], "Index of SpectrumArray out of range."
 
         return Spectrum(wavelengths=self.wavelengths,
-                        fluxes=self.fluxes[index, :],
-                        flux_errors=self.flux_errors[index, :])
+                        values=self.values[index, :],
+                        value_errors=self.value_errors[index, :])
