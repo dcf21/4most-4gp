@@ -31,7 +31,17 @@ def requires_ids_or_filenames(method):
 
 class SpectrumLibrary(object):
     """
-    An abstract spectrum library object
+    An abstract spectrum library object.
+    
+    Spectrum libraries are a bit like having a directory full of data files on disk, each containing a spectrum.
+    However, they also include a database which can store arbitrary metadata about each spectrum -- for example,
+    stellar paramaters and abundances. It is possible to search a spectrum library based on metadata constraints.
+
+    Various implementations of the SpectrumLibrary class are provided, storing the metadata in different flavours of
+    SQL database. SQLite is probably the simplest and creates portable libraries that you can transfer to a different
+    machine with all metadata intact. MySQL is a faster database engine, and probably a better option for data which
+    doesn't need to move around.
+
     
     :ivar list[string] _metadata_fields:
         A list of the metadata fields set on spectra in this SpectrumLibrary
