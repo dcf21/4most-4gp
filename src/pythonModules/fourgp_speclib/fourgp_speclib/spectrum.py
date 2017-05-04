@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os
 from os import path as os_path
 import numpy as np
 import hashlib
@@ -65,30 +64,95 @@ class Spectrum(object):
     :ivar bool mask_set:
         Boolean selecting whether any wavelengths are currently masked out.
         
+    :ivar dict metadata:
+        Dictionary of metadata about this spectrum.
+        
     :ivar str raster_hash:
         A string hash of the wavelength raster, used to quickly check whether spectra are sampled on a common raster.
     """
 
-    def __init__(self, wavelengths, values, value_errors):
+    def __init__(self, wavelengths, values, value_errors, metadata):
         """
         Instantiate a new Spectrum object.
         
         :param wavelengths: 
             A 1D array listing the wavelengths at which this array of spectra are sampled.
+            
+        :type wavelengths:
+            np.ndarray
         
         :param values: 
             A 2D array listing the value measurements for each spectrum in this SpectrumArray.
             
+        :type values:
+            np.ndarray
+            
         :param value_errors: 
             A 2D array listing the standard errors in the value measurements for each spectrum in this SpectrumArray.
+            
+        :type value_errors:
+            np.ndarray
+            
+        :param metadata:
+            Dictionary of metadata about this spectrum.
+            
+        :type metadata:
+            dict
+        
         """
         self.wavelengths = wavelengths
         self.values = values
         self.value_errors = value_errors
         self.mask = np.ones_like(self.wavelengths)
         self.mask_set = False
+        self.metadata = metadata
 
         self._update_raster_hash()
+
+    @classmethod
+    def from_file(cls, filename, *args, **kwargs):
+        """
+        Factory method to read a spectrum in from a text file.
+        
+        :param filename: 
+            Filename of text file, containing wavelengths, values and errors in three columns
+            
+        :type filename:
+            str
+            
+        :return:
+            Spectrum object
+        """
+
+        assert os_path.exists(filename), "File <{}> does not exist.".format(filename)
+
+        wavelengths, values, value_errors = np.loadtxt(filename).T
+        cls(wavelengths=wavelengths, values=values, value_errors=value_errors, *args, **kwargs)
+
+    def to_file(self, filename, overwrite = False):
+        """
+        Dump a spectrum object to a text file, with three columns containing wavelengths, data values, and errors.
+        
+        :param filename:
+            Filename of text file to write.
+            
+        :type filename:
+            str
+            
+        :param overwrite:
+            Boolean specifying whether we're allowed to overwrite existing files.
+            
+        :type overwrite:
+            bool
+            
+        :return:
+            None
+        """
+
+        if os_path.exists(filename) and not overwrite:
+            logger.error("File <{}> already exists. Set overwrite API option to force overwriting of it.".format(
+                filename))
+        np.savetxt(filename, (self.wavelengths, self.value, self.value_errors))
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,

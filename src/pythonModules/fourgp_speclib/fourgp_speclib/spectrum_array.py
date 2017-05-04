@@ -24,9 +24,15 @@ class SpectrumArray(object):
         
     :ivar str raster_hash:
         A string hash of the wavelength raster, used to quickly check whether spectra are sampled on a common raster.
+        
+    :ivar list[dict] metadata_list:
+        A list of dictionaries of metadata about each of the spectra in this SpectrumArray
+        
+    :ivar bool shared_memory:
+        Boolean flag indicating whether this SpectrumArray uses multiprocessing shared memory.
     """
 
-    def __init__(self, wavelengths, values, value_errors):
+    def __init__(self, wavelengths, values, value_errors, metadata_list):
         """
         Instantiate new SpectrumArray object.
         
@@ -38,11 +44,41 @@ class SpectrumArray(object):
             
         :param value_errors: 
             A 2D array listing the standard errors in the value measurements for each spectrum in this SpectrumArray.
+            
+        :param metadata_list:
+            A list of dictionaries of metadata about each of the spectra in this SpectrumArray
         """
+
         self.wavelengths = wavelengths
         self.values = values
         self.value_errors = value_errors
+        self.metadata_list = metadata_list
+        self.shared_memory = False
         self._update_raster_hash()
+
+    @classmethod
+    def from_files(cls, filenames, metadata_list, shared_memory=False):
+        """
+        Instantiate new SpectrumArray object, using data in a list of text files.
+        
+        :param filenames: 
+            List of the filenames of the text files from which to import spectra. Each file should have three columns:
+            wavelength, value, and error in value.
+            
+        :param metadata_list:
+            A list of dictionaries of metadata about each of the spectra in this SpectrumArray
+            
+        :param shared_memory:
+            Boolean flag indicating whether this SpectrumArray should use multiprocessing shared memory.
+            
+        :type shared_memory:
+            bool
+         
+        :return:
+            SpectrumArray object
+        """
+
+        
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,
