@@ -10,6 +10,7 @@ Welcome to 4GP's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   api/modules.rst
 
 
 Indices and tables

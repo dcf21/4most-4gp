@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from os import path as os_path
 import MySQLdb
 
-from spectrum_library_sql import SpectrumLibrarySQL
+from spectrum_library_sql import SpectrumLibrarySql
 
 
-class SpectrumLibraryMySql(SpectrumLibrarySQL):
+class SpectrumLibraryMySql(SpectrumLibrarySql):
     """
     A spectrum library implementation that uses MySQL to store metadata about each spectrum.
     
