@@ -554,7 +554,7 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
             ids = self._filenames_to_ids(filenames=filenames)
         metadata = self.get_metadata(filenames=(filename,))
 
-    def insert(self, spectra, filenames, origin="Undefined", metadata=None, overwrite=False):
+    def insert(self, spectra, filenames, origin="Undefined", metadata_list=None, overwrite=False):
         """
         Insert the spectra from a SpectrumArray object into this spectrum library.
         
@@ -577,10 +577,10 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
         :type origin:
             str
             
-        :param metadata: 
+        :param metadata_list: 
             A list of dictionaries of metadata to set on each of the spectra in this SpectrumArray.
             
-        :type metadata:
+        :type metadata_list:
             List of dict
             
         :param overwrite:
@@ -596,12 +596,18 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
         # Fetch the numerical id of the origin of these spectra
         origin_id = self._fetch_origin_id(origin)
 
-        # Create database entry a spectrum
-        self._db_cursor.execute("""
+        # Insert each spectrum in turn
+        for filename, spectrum, metadata in zip(filenames, spectra, metadata_list):
+
+            # Write spectrum to text file
+            spectrum.to_file(filename=filename, overwrite=overwrite)
+
+            # Create database entry a spectrum
+            self._db_cursor.execute("""
 REPLACE INTO spectra (filename, originId, importTime)
  VALUES (%s, %s, (JULIANDAY('now') - 2440587.5) * 86400.0);
-        """, (filename, origin_id))
+            """, (filename, origin_id))
 
-        # Set metadata on this spectrum
-        if metadata is not None:
-            self.set_metadata(filenames=(filename,), metadata=metadata)
+            # Set metadata on this spectrum
+            if metadata is not None:
+                self.set_metadata(filenames=(filename,), metadata=metadata)
