@@ -3,6 +3,8 @@
 
 import os
 from os import path as os_path
+import re
+import time
 import hashlib
 import logging
 
@@ -206,6 +208,10 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         raise NotImplementedError("The _create_database method must be implemented separately for each SQL "
                                   "implementation")
 
+    def close(self):
+        self._db.commit()
+        self._db.close()
+
     def refresh_database(self):
         self._db.commit()
         self._db.close()
@@ -339,9 +345,10 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         """
 
         output = []
+        filename_strings = ["\"%s\""%re.sub("[^a-zA-Z0-9_-]","",i) for i in filenames]
         self._parameterised_query("""
-SELECT specId FROM spectra WHERE libraryId=? AND filename IN ?;
-""", (self._library_id, filenames))
+SELECT specId FROM spectra WHERE libraryId=%s AND filename IN (%s);
+"""%(self._library_id, ",".join(filename_strings)))
 
         for item in self._db_cursor:
             output.append(item["specId"])
@@ -363,9 +370,10 @@ SELECT specId FROM spectra WHERE libraryId=? AND filename IN ?;
         """
 
         output = []
+        id_strings = [str(int(i)) for i in ids]
         self._parameterised_query("""
-SELECT filename FROM spectra WHERE libraryId=? AND specId IN ?;
-""", (self._library_id, ids))
+SELECT filename FROM spectra WHERE libraryId=%s AND specId IN (%s);
+"""%(self._library_id, ",".join(id_strings)))
 
         for item in self._db_cursor:
             output.append(item["filename"])
@@ -544,19 +552,19 @@ WHERE i.libraryId=? AND i.specId=?;
             keyId = self._fetch_metadata_field_id(name=key)
 
             # Create a big table of parameters to substitute into an SQL query, acting on every spectrum at once
-            query_data = zip([self._library_id] * len(ids), [keyId] * len(ids), [value] * len(ids), ids)
+            query_data = zip([self._library_id] * len(ids), ids, [keyId] * len(ids), [value] * len(ids))
 
             # If this metadata item has a numeric value, we store it in the SQL field <valueFloat>
             if isinstance(value, (int, float)):
-                self._parameterised_querymany("""
+                self._parameterised_query_many("""
 REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueFloat) VALUES 
-(?, ?, (SELECT fieldId FROM metadata_fields WHERE name=?), ?)""", query_data)
+(?, ?, ?, ?)""", query_data)
 
             # ... otherwise we store it in the SQL field <valueString>
             else:
-                self._parameterised_querymany("""
+                self._parameterised_query_many("""
 REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES 
-(?, ?, (SELECT fieldId FROM metadata_fields WHERE name=?), ?)""", query_data)
+(?, ?, ?, ?)""", query_data)
 
         # Commit changes into database
         self._db.commit()
@@ -594,7 +602,10 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
         metadata_list = []
         for filename in filenames:
             metadata_list.append(self.get_metadata(filenames=(filename,)))
-        return SpectrumArray.from_files(filenames=filenames, metadata_list=metadata_list, shared_memory=shared_memory)
+        return SpectrumArray.from_files(path=self._path,
+                                        filenames=filenames,
+                                        metadata_list=metadata_list,
+                                        shared_memory=shared_memory)
 
     def insert(self, spectra, filenames, origin="Undefined", metadata_list=None, overwrite=False):
         """
@@ -660,13 +671,13 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
 
             # Write spectrum to text file
             spectrum = spectra if isinstance(spectra, Spectrum) else spectra.extract_item(index)
-            spectrum.to_file(filename=filename, overwrite=overwrite)
+            spectrum.to_file(filename=os_path.join(self._path, filename), overwrite=overwrite)
 
             # Create database entry a spectrum
             self._parameterised_query("""
-REPLACE INTO spectra (filename, originId, importTime)
- VALUES (?, ?, (JULIANDAY('now') - 2440587.5) * 86400.0);
-            """, (filename, origin_id))
+REPLACE INTO spectra (filename, originId, libraryId, importTime)
+ VALUES (?, ?, ?, ?);
+            """, (filename, origin_id, self._library_id, time.time()))
 
             # Set metadata on this spectrum
             self.set_metadata(filenames=(filename,), metadata=spectrum.metadata)

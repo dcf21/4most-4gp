@@ -93,3 +93,6 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
         if parameters is None:
             parameters = ()
         self._db_cursor.execute(sql, parameters)
+
+    def _parameterised_query_many(self, sql, parameters=None):
+        self._db_cursor.executemany(sql, parameters)

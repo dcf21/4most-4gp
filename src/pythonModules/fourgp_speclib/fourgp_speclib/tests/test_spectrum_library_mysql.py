@@ -39,12 +39,20 @@ class TestSpectrumLibraryMySqlCreation(unittest.TestCase):
         db_path_1 = os_path.join("/tmp", "speclib_test_{}".format(unique_filename_1))
         unique_filename_2 = uuid.uuid4()
         db_path_2 = os_path.join("/tmp", "speclib_test_{}".format(unique_filename_2))
-        lib_1 = fourgp_speclib.SpectrumLibraryMySql(path=db_path_1,
+        lib_1 = fourgp_speclib.SpectrumLibraryMySql(path=db_path_1, create=True, purge_db=True,
                                                     db_user=db_user, db_passwd=db_passwd,
                                                     db_name=db_name, db_host=db_host)
-        lib_2 = fourgp_speclib.SpectrumLibraryMySql(path=db_path_2,
+        lib_2 = fourgp_speclib.SpectrumLibraryMySql(path=db_path_2, create=True,
                                                     db_user=db_user, db_passwd=db_passwd,
                                                     db_name=db_name, db_host=db_host)
+        lib_3 = fourgp_speclib.SpectrumLibraryMySql(path=db_path_1,
+                                                    db_user=db_user, db_passwd=db_passwd,
+                                                    db_name=db_name, db_host=db_host)
+        lib_4 = fourgp_speclib.SpectrumLibraryMySql(path=db_path_2,
+                                                    db_user=db_user, db_passwd=db_passwd,
+                                                    db_name=db_name, db_host=db_host)
+        lib_3.close()
+        lib_4.close()
         lib_1.purge()
         lib_2.purge()
 

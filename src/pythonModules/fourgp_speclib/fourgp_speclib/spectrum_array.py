@@ -61,7 +61,7 @@ class SpectrumArray(object):
         # Sanity check inputs
         assert wavelengths.shape[0] == values.shape[1], "Inconsistent number of wavelength samples."
         assert wavelengths.shape[0] == value_errors.shape[1], "Inconsistent number of wavelength samples."
-        assert values.shape[0] == value_errors.shape[1], "Inconsistent number of spectra in SpectrumArray."
+        assert values.shape[0] == value_errors.shape[0], "Inconsistent number of spectra in SpectrumArray."
         assert len(metadata_list) == values.shape[0], "Inconsistent number of spectra in SpectrumArray."
 
         # Store inputs as instance variables
@@ -82,13 +82,22 @@ class SpectrumArray(object):
         return self.values.shape[0]
 
     @classmethod
-    def from_files(cls, filenames, metadata_list, shared_memory=False):
+    def from_files(cls, filenames, metadata_list, path="", shared_memory=False):
         """
         Instantiate new SpectrumArray object, using data in a list of text files.
         
         :param filenames: 
             List of the filenames of the text files from which to import spectra. Each file should have three columns:
             wavelength, value, and error in value.
+            
+        :type filenames:
+            List[str]
+            
+        :param path:
+            The file path from which to load the list of spectrum files.
+            
+        :type path:
+            str
             
         :param metadata_list:
             A list of dictionaries of metadata about each of the spectra in this SpectrumArray
@@ -105,7 +114,7 @@ class SpectrumArray(object):
 
         # Load first spectrum to work out what wavelength raster we're using
         assert len(filenames) > 0, "Cannot open a SpectrumArray with no members: there is no wavelength raster"
-        wavelengths, item_values, item_value_errors = np.loadtxt(filenames[0]).T
+        wavelengths, item_values, item_value_errors = np.loadtxt(os_path.join(path, filenames[0])).T
         raster_hash = hash_numpy_array(wavelengths)
 
         # Allocate numpy array to store this SpectrumArray into
@@ -134,6 +143,7 @@ class SpectrumArray(object):
 
         # Load spectra one by one
         for i, filename in enumerate(filenames):
+            filename = os_path.join(path, filename)
             assert os_path.exists(filename), "File <{}> does not exist.".format(filename)
             item_wavelengths, item_values, item_value_errors = np.loadtxt(filename).T
             assert hash_numpy_array(item_wavelengths) == raster_hash, \
@@ -143,11 +153,11 @@ class SpectrumArray(object):
             value_errors[i, :] = item_values
 
         # Instantiate a SpectrumArray object
-        cls(wavelengths=wavelengths,
-            values=values,
-            value_errors=value_errors,
-            metadata_list=metadata_list,
-            shared_memory=shared_memory)
+        return cls(wavelengths=wavelengths,
+                   values=values,
+                   value_errors=value_errors,
+                   metadata_list=metadata_list,
+                   shared_memory=shared_memory)
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,

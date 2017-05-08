@@ -22,7 +22,7 @@ def hash_numpy_array(item):
     :return:
         String hash
     """
-    raw = item.view(np.uint8)
+    raw = item.copy().view(np.uint8)
     return hashlib.sha1(raw).hexdigest()
 
 
@@ -36,7 +36,6 @@ def requires_common_raster(method):
     """
 
     def wrapper(spectrum, other, *args, **kwargs):
-
         assert spectrum.raster_hash == other.raster_hash, \
             "Cannot do arithmetic on spectra sampled on a different wavelength rasters"
 
@@ -71,7 +70,7 @@ class Spectrum(object):
         A string hash of the wavelength raster, used to quickly check whether spectra are sampled on a common raster.
     """
 
-    def __init__(self, wavelengths, values, value_errors, metadata):
+    def __init__(self, wavelengths, values, value_errors, metadata=None):
         """
         Instantiate a new Spectrum object.
         
@@ -100,6 +99,10 @@ class Spectrum(object):
             dict
         
         """
+
+        if metadata is None:
+            metadata = {}
+
         self.wavelengths = wavelengths
         self.values = values
         self.value_errors = value_errors
@@ -107,6 +110,7 @@ class Spectrum(object):
         self.mask_set = False
         self.metadata = metadata
 
+        self._validate_data_dimensions()
         self._update_raster_hash()
 
     @classmethod
@@ -127,9 +131,9 @@ class Spectrum(object):
         assert os_path.exists(filename), "File <{}> does not exist.".format(filename)
 
         wavelengths, values, value_errors = np.loadtxt(filename).T
-        cls(wavelengths=wavelengths, values=values, value_errors=value_errors, *args, **kwargs)
+        return cls(wavelengths=wavelengths, values=values, value_errors=value_errors, *args, **kwargs)
 
-    def to_file(self, filename, overwrite = False):
+    def to_file(self, filename, overwrite=False):
         """
         Dump a spectrum object to a text file, with three columns containing wavelengths, data values, and errors.
         
@@ -152,7 +156,7 @@ class Spectrum(object):
         if os_path.exists(filename) and not overwrite:
             logger.error("File <{}> already exists. Set overwrite API option to force overwriting of it.".format(
                 filename))
-        np.savetxt(filename, (self.wavelengths, self.value, self.value_errors))
+        np.savetxt(filename, np.transpose([self.wavelengths, self.values, self.value_errors]))
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,
@@ -161,6 +165,29 @@ class Spectrum(object):
     def __repr__(self):
         return "<{0}.{1} object at {2}>".format(self.__module__,
                                                 type(self).__name__, hex(id(self)))
+
+    def __len__(self):
+        return self.wavelengths.shape[0]
+
+    def __eq__(self, other):
+        return np.array_equal(self.wavelengths, other.wavelengths) and np.array_equal(self.values, other.values)
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def _validate_data_dimensions(self):
+        """
+        Validate that the wavelength raster, value array, and error array are of matching sizes.
+        
+        :return: 
+            None
+        """
+        for i in [self.wavelengths, self.values, self.value_errors]:
+            assert isinstance(i, np.ndarray), "Input argument to Spectrum class was not a numpy array"
+
+        for i in [self.wavelengths, self.values, self.value_errors]:
+            assert len(i.shape) == 1, "Input argument to Spectrum class was not a 1D numpy array"
+            assert i.shape[0] == self.wavelengths.shape[0], "Input argument to Spectrum class were of differing lengths"
 
     def _update_raster_hash(self):
         """
@@ -334,9 +361,9 @@ class Spectrum(object):
         self.value_errors = np.hypot(self.value_errors, other.value_errors)
 
         if not (self.mask_set or other.mask_set):
-            self.value = self.values - other.values
+            self.values = self.values - other.values
         else:
-            self.value = self.values * self.mask - other.values * other.mask
+            self.values = self.values * self.mask - other.values * other.mask
             self.mask *= other.mask
             self.value_errors[~self.mask] = np.inf
 

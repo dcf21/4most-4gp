@@ -127,3 +127,7 @@ class SpectrumLibraryMySql(SpectrumLibrarySql):
             parameters = ()
         sql = re.sub(r"\?", r"%s", sql)
         self._db_cursor.execute(sql, parameters)
+
+    def _parameterised_query_many(self, sql, parameters=None):
+        sql = re.sub(r"\?", r"%s", sql)
+        self._db_cursor.executemany(sql, parameters)

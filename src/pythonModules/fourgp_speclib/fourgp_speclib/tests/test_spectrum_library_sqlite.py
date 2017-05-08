@@ -32,7 +32,11 @@ class TestSpectrumLibrarySQLiteCreation(unittest.TestCase):
         unique_filename_2 = uuid.uuid4()
         db_path_2 = os_path.join("/tmp", "speclib_test_{}".format(unique_filename_2))
         lib_1 = fourgp_speclib.SpectrumLibrarySqlite(path=db_path_1, create=True)
-        lib_2 = fourgp_speclib.SpectrumLibrarySqlite(path=db_path_2)
+        lib_2 = fourgp_speclib.SpectrumLibrarySqlite(path=db_path_2, create=True)
+        lib_3 = fourgp_speclib.SpectrumLibrarySqlite(path=db_path_1)
+        lib_4 = fourgp_speclib.SpectrumLibrarySqlite(path=db_path_2)
+        lib_3.close()
+        lib_4.close()
         lib_1.purge()
         lib_2.purge()
 
