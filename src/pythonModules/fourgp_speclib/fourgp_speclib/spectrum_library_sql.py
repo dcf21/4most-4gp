@@ -106,19 +106,20 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         """
 
         # Create new spectrum library if requested
+        self._path = path
         if create:
-            self._create(path)
+            self._create()
 
         # Check that we're not overwriting an existing library
         assert os_path.exists(path), \
             "Could not open spectrum library <{}>: directory not found".format(path)
 
-        self._path = path
-        self._db, self._db_cursor = self._open_database()
+        if not create:
+            self._db, self._db_cursor = self._open_database()
 
         try:
             # Check that this library uses the right flavour of SQL
-            with open(os_path.join(self._path, "type_id"), "w") as f:
+            with open(os_path.join(self._path, "type_id")) as f:
                 expected_library_type = type(self).__name__
                 library_type = f.read()
                 assert library_type == expected_library_type, \
@@ -129,7 +130,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             # Some SQL implementations (e.g. MySQL) share multiple spectrum libraries in a single database. Others
             # (e.g. SQLite) have a separate database for each spectrum library
             with open(os_path.join(self._path, "unique_id")) as f:
-                self._unique_id = f.read()
+                self._unique_id = f.read().strip()
                 self._library_id = self._fetch_library_id(self._unique_id, False)
 
         except IOError:
@@ -141,34 +142,32 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
 
         super(SpectrumLibrarySql, self).__init__()
 
-    def _create(self, path):
+    def _create(self):
         """
         Create a new, empty spectrum library.
-        
-        :param path:
-            The file path to use for storing spectra in this library.
-            
-        :type path:
-            str
             
         :return:
             None
         """
 
         # Check that we're not overwriting an existing library
-        assert not os_path.exists(path), \
-            "Could not create spectrum library <{}>: file already exists".format(path)
+        assert not os_path.exists(self._path), \
+            "Could not create spectrum library <{}>: file already exists".format(self._path)
 
         # Check that parent directory exists
-        parent_path, file_name = os_path.split(path)
+        parent_path, file_name = os_path.split(self._path)
         assert os_path.exists(parent_path), \
-            "Could not create spectrum library <{}>: parent directory does not exist".format(path)
+            "Could not create spectrum library <{}>: parent directory does not exist".format(self._path)
 
         # Create directory to hold spectra in this library
         try:
-            os.mkdir(path)
+            os.mkdir(self._path)
         except IOError:
             raise
+
+        # Create SQL database to hold metadata about these spectra
+        self._create_database()
+        self._db, self._db_cursor = self._open_database()
 
         # Record the database format used by this library
         with open(os_path.join(self._path, "type_id"), "w") as f:
@@ -178,11 +177,10 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         # Create a random unique id for this library
         with open(os_path.join(self._path, "unique_id"), "w") as f:
             unique_id = hashlib.md5(os.urandom(32).encode('hex')).hexdigest()
-            self._library_id = self._fetch_library_id(self._unique_id, True)
+            self._library_id = self._fetch_library_id(unique_id, True)
             f.write(unique_id)
 
-        # Create SQL database to hold metadata about these spectra
-        self._create_database()
+        self._db.commit()
 
     def _open_database(self):
         """
@@ -227,7 +225,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
 
         # Create list of available metadata fields
         self._metadata_fields = []
-        self._db_cursor.execute("SELECT fieldId, name FROM metadata_fields;")
+        self._parameterised_query("SELECT fieldId, name FROM metadata_fields;")
         for item in self._db_cursor:
             self._metadata_fields.append(item['name'])
 
@@ -254,20 +252,21 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
 
         while True:
             # Look up whether this origin name already exists in the database
-            self._db_cursor.execute("SELECT libraryId FROM libraries WHERE name=%s;", (name,))
+            self._parameterised_query("SELECT libraryId FROM libraries WHERE name=?;", (name,))
             results = self._db_cursor.fetchall()
 
-            assert not (bool(results) and add_record), \
+            assert not (len(results) > 0 and add_record), \
                 "Attempting to create a library which already exists in the database."
 
-            assert not ((not bool(results)) and (not add_record)), \
+            assert not (len(results) == 0 and (not add_record)), \
                 "Attempting to access a library which doesn't exist in the database."
 
             if results:
                 return results[0]['libraryId']
 
             # If not, add it into the database
-            self._db_cursor.execute("INSERT INTO libraries (name) VALUES (%s);", (name,))
+            self._parameterised_query("INSERT INTO libraries (name) VALUES (?);", (name,))
+            self._db.commit()
             add_record = False
 
     def _fetch_origin_id(self, name):
@@ -287,13 +286,14 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
 
         while True:
             # Look up whether this origin name already exists in the database
-            self._db_cursor.execute("SELECT originId FROM origins WHERE name=%s;", (name,))
+            self._parameterised_query("SELECT originId FROM origins WHERE name=?;", (name,))
             results = self._db_cursor.fetchall()
             if results:
                 return results[0]['originId']
 
             # If not, add it into the database
-            self._db_cursor.execute("INSERT INTO origins (name) VALUES (%s);", (name,))
+            self._parameterised_query("INSERT INTO origins (name) VALUES (?);", (name,))
+            self._db.commit()
 
     def _fetch_metadata_field_id(self, name):
         """
@@ -312,13 +312,14 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
 
         while True:
             # Look up whether this metadata field already exists in the database
-            self._db_cursor.execute("SELECT fieldId FROM metadata_fields WHERE name=%s;", (name,))
+            self._parameterised_query("SELECT fieldId FROM metadata_fields WHERE name=?;", (name,))
             results = self._db_cursor.fetchall()
             if results:
                 return results[0]['fieldId']
 
             # If not, add it into the database
-            self._db_cursor.execute("INSERT INTO metadata_fields (name) VALUES (%s);", (name,))
+            self._parameterised_query("INSERT INTO metadata_fields (name) VALUES (?);", (name,))
+            self._db.commit()
             self._metadata_init()
 
     def _filenames_to_ids(self, filenames):
@@ -337,8 +338,8 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         """
 
         output = []
-        self._db_cursor.execute("""
-SELECT specId FROM spectra WHERE libraryId=%s AND filename IN %s;
+        self._parameterised_query("""
+SELECT specId FROM spectra WHERE libraryId=? AND filename IN ?;
 """, (self._library_id, filenames))
 
         for item in self._db_cursor:
@@ -361,8 +362,8 @@ SELECT specId FROM spectra WHERE libraryId=%s AND filename IN %s;
         """
 
         output = []
-        self._db_cursor.execute("""
-SELECT filename FROM spectra WHERE libraryId=%s AND specId IN %s;
+        self._parameterised_query("""
+SELECT filename FROM spectra WHERE libraryId=? AND specId IN ?;
 """, (self._library_id, ids))
 
         for item in self._db_cursor:
@@ -378,7 +379,7 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN %s;
         """
 
         # Delete spectra
-        self._db_cursor.execute("SELECT filename FROM spectra WHERE libraryId=%s;", (self._library_id,))
+        self._parameterised_query("SELECT filename FROM spectra WHERE libraryId=?;", (self._library_id,))
         for item in self._db_cursor:
             os.unlink(os_path.join(self._path, item["filename"]))
 
@@ -387,7 +388,8 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN %s;
         os.unlink(os_path.join(self._path, "type_id"))
 
         # Delete database entries
-        self._db_cursor.execute("DELETE FROM libraries WHERE libraryId=%s;", (self._library_id,))
+        self._parameterised_query("DELETE FROM libraries WHERE libraryId=?;", (self._library_id,))
+        self._db.commit()
 
     def search(self, **kwargs):
         """
@@ -404,7 +406,7 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN %s;
         """
 
         # Start building a list of SQL search criteria as string fragments
-        criteria = ["libraryId = %s"]
+        criteria = ["libraryId = ?"]
 
         # List of parameters to substitute into the SQL query we are building
         criteria_params = [self._library_id]
@@ -424,7 +426,7 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN %s;
 EXISTS (SELECT 1
     FROM spectrum_metadata i
     INNER JOIN metadata_fields f ON f.fieldId = i.fieldId
-    WHERE f.libraryId={} AND f.name={} AND ((i.valueFloat BETWEEN %s AND %s) OR (i.valueString BETWEEN %s AND %s)) )
+    WHERE f.libraryId={} AND f.name={} AND ((i.valueFloat BETWEEN ? AND ?) OR (i.valueString BETWEEN ? AND ?)) )
                 """.format(self._library_id, key))
                 criteria_params.append(min(search_range))
                 criteria_params.append(max(search_range))
@@ -437,7 +439,7 @@ EXISTS (SELECT 1
 EXISTS (SELECT 1
     FROM spectrum_metadata i
     INNER JOIN metadata_fields f ON f.fieldId = i.fieldId
-    WHERE f.libraryId={} AND f.name={} AND ((i.valueFloat = %s) OR (i.valueString = %s)) )
+    WHERE f.libraryId={} AND f.name={} AND ((i.valueFloat = ?) OR (i.valueString = ?)) )
                 """.format(self._library_id, key))
                 criteria_params.append(search_range)
                 criteria_params.append(search_range)
@@ -448,7 +450,7 @@ SELECT s.specId, s.filename, o.name AS origin
 FROM spectra s
 INNER JOIN origins o ON s.originId = o.originId
 WHERE {};""".format(" AND ".join(criteria))
-        self._db_cursor.execute(query, criteria_params)
+        self._parameterised_query(query, criteria_params)
         return self._db_cursor.fetchall()
 
     @requires_ids_or_filenames
@@ -487,11 +489,11 @@ WHERE {};""".format(" AND ".join(criteria))
             item = {}
 
             # Search the database for metadata
-            self._db_cursor.execute("""
+            self._parameterised_query("""
 SELECT f.name, CASE WHEN i.valueFloat IS NOT NULL THEN i.valueFloat ELSE i.valueString END AS value
 FROM spectrum_metadata i
 INNER JOIN metadata_fields f ON f.fieldId=i.fieldId
-WHERE i.libraryId=%s AND i.specId=%s;
+WHERE i.libraryId=? AND i.specId=?;
             """, (self._library_id, id))
 
             # Enter metadata into dictionary
@@ -545,15 +547,18 @@ WHERE i.libraryId=%s AND i.specId=%s;
 
             # If this metadata item has a numeric value, we store it in the SQL field <valueFloat>
             if isinstance(value, (int, float)):
-                self._db_cursor.executemany("""
+                self._parameterised_querymany("""
 REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueFloat) VALUES 
-(%s, %s, (SELECT fieldId FROM metadata_fields WHERE name=%s), %s)""", query_data)
+(?, ?, (SELECT fieldId FROM metadata_fields WHERE name=?), ?)""", query_data)
 
             # ... otherwise we store it in the SQL field <valueString>
             else:
-                self._db_cursor.executemany("""
+                self._parameterised_querymany("""
 REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES 
-(%s, %s, (SELECT fieldId FROM metadata_fields WHERE name=%s), %s)""", query_data)
+(?, ?, (SELECT fieldId FROM metadata_fields WHERE name=?), ?)""", query_data)
+
+        # Commit changes into database
+        self._db.commit()
 
     @requires_ids_or_filenames
     def open(self, ids=None, filenames=None, shared_memory=False):
@@ -657,12 +662,15 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
             spectrum.to_file(filename=filename, overwrite=overwrite)
 
             # Create database entry a spectrum
-            self._db_cursor.execute("""
+            self._parameterised_query("""
 REPLACE INTO spectra (filename, originId, importTime)
- VALUES (%s, %s, (JULIANDAY('now') - 2440587.5) * 86400.0);
+ VALUES (?, ?, (JULIANDAY('now') - 2440587.5) * 86400.0);
             """, (filename, origin_id))
 
             # Set metadata on this spectrum
             self.set_metadata(filenames=(filename,), metadata=spectrum.metadata)
             if metadata is not None:
                 self.set_metadata(filenames=(filename,), metadata=metadata)
+
+        # Commit changes into database
+        self._db.commit()

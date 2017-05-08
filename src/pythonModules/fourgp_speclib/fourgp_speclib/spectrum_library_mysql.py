@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import MySQLdb
+import re
 
 from spectrum_library_sql import SpectrumLibrarySql
 
@@ -87,7 +88,6 @@ class SpectrumLibraryMySql(SpectrumLibrarySql):
         db = MySQLdb.connect(host=self._db_host, user=self._db_user, passwd=self._db_passwd, db=self._db_name)
         c = db.cursor(cursorclass=MySQLdb.cursors.DictCursor)
         c.executescript(self._schema)
-        c.execute("INSERT INTO libraries (name) VALUES (%s)", (self._library_id,))
         db.commit()
         db.close()
 
@@ -95,3 +95,9 @@ class SpectrumLibraryMySql(SpectrumLibrarySql):
         self._db = MySQLdb.connect(host=self._db_host, user=self._db_user, passwd=self._db_passwd, db=self._db_name)
         self._db_cursor = self._db.cursor(cursorclass=MySQLdb.cursors.DictCursor)
         return self._db, self._db_cursor
+
+    def _parameterised_query(self, sql, parameters=None):
+        if parameters is None:
+            parameters = ()
+        sql = re.sub("?", "%s", sql)
+        self._db_cursor.execute(sql, parameters)

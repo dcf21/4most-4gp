@@ -58,7 +58,6 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
         db = sqlite3.connect(db_path)
         c = db.cursor()
         c.executescript(self._schema)
-        c.execute("INSERT INTO libraries (name) VALUES (%s)", (self._library_id,))
         db.commit()
         db.close()
 
@@ -69,6 +68,7 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
             "Attempting to open an SQLite database <{}> that doesn't exist.".format(db_path)
 
         self._db = sqlite3.connect(self._path_db)
+        self._db.row_factory = sqlite3.Row
         self._db_cursor = self._db.cursor()
         return self._db, self._db_cursor
 
@@ -85,3 +85,8 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
         # Delete SQLite file
         self._db.close()
         os.unlink(os_path.join(self._path_db))
+
+    def _parameterised_query(self, sql, parameters=None):
+        if parameters is None:
+            parameters = ()
+        self._db_cursor.execute(sql, parameters)
