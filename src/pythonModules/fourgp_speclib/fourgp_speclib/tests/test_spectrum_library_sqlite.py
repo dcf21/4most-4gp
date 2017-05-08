@@ -8,8 +8,10 @@ Unit tests for the SQLite implementation of spectrum libraries
 from os import path as os_path
 import uuid
 import unittest
-import numpy as np
 import fourgp_speclib
+
+from test_spectrum_library_sql import TestSpectrumLibrarySQL
+
 
 
 class TestSpectrumLibrarySQLiteCreation(unittest.TestCase):
@@ -32,7 +34,7 @@ class TestSpectrumLibrarySQLiteCreation(unittest.TestCase):
             fourgp_speclib.SpectrumLibrarySqlite(path=db_path, create=False)
 
 
-class TestSpectrumLibrarySQLite(unittest.TestCase):
+class TestSpectrumLibrarySQLite(unittest.TestCase, TestSpectrumLibrarySQL):
     def setUp(self):
         """
         Open connection to a clean SpectrumLibrary based on SQLite.

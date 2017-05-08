@@ -8,10 +8,9 @@ Unit tests for the MySQL implementation of spectrum libraries
 from os import path as os_path
 import uuid
 import unittest
-import numpy as np
 import fourgp_speclib
 
-from .test_spectrum_library_sql import TestSpectrumLibrarySQL
+from test_spectrum_library_sql import TestSpectrumLibrarySQL
 
 # These tests require a test MySQL database to be present
 db_host = "localhost"
