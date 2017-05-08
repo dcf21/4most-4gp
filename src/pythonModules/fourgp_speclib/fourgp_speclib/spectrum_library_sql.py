@@ -7,6 +7,8 @@ import hashlib
 import logging
 
 from spectrum_library import SpectrumLibrary, requires_ids_or_filenames
+from spectrum_array import SpectrumArray
+from spectrum import Spectrum
 
 logger = logging.getLogger(__name__)
 
@@ -343,6 +345,30 @@ SELECT specId FROM spectra WHERE libraryId=%s AND filename IN %s;
             output.append(item["specId"])
         return output
 
+    def _ids_to_filenames(self, ids):
+        """
+        Convert a list of database Ids into spectra filenames. This helper function is used by various methods which
+        can act on spectra referenced either by database id or by filename.
+         
+        :param ids:
+            A list of database ids whose filenames should be looked up.
+            
+        :type ids:
+            list of int
+            
+        :return:
+            list of str
+        """
+
+        output = []
+        self._db_cursor.execute("""
+SELECT filename FROM spectra WHERE libraryId=%s AND specId IN %s;
+""", (self._library_id, ids))
+
+        for item in self._db_cursor:
+            output.append(item["filename"])
+        return output
+
     def purge(self):
         """
         This irrevocably deletes the spectrum library from the database and from your disk. You have been warned.
@@ -462,7 +488,7 @@ WHERE {};""".format(" AND ".join(criteria))
 
             # Search the database for metadata
             self._db_cursor.execute("""
-SELECT f.name, (CASE WHEN i.valueFloat IS NOT NULL THEN i.valueFloat ELSE i.valueString) AS value
+SELECT f.name, CASE WHEN i.valueFloat IS NOT NULL THEN i.valueFloat ELSE i.valueString END AS value
 FROM spectrum_metadata i
 INNER JOIN metadata_fields f ON f.fieldId=i.fieldId
 WHERE i.libraryId=%s AND i.specId=%s;
@@ -530,7 +556,7 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
 (%s, %s, (SELECT fieldId FROM metadata_fields WHERE name=%s), %s)""", query_data)
 
     @requires_ids_or_filenames
-    def open(self, ids=None, filenames=None):
+    def open(self, ids=None, filenames=None, shared_memory=False):
         """
         Open some spectra from this spectrum library, and return them as a SpectrumArray object.
         
@@ -546,29 +572,40 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
         :type filenames:
             List of str, or None
             
+        :param shared_memory:
+            Boolean flag indicating whether this SpectrumArray should use multiprocessing shared memory.
+            
+        :type shared_memory:
+            bool
+            
         :return:
             A SpectrumArray object.
         """
 
-        if filenames is not None:
-            ids = self._filenames_to_ids(filenames=filenames)
-        metadata = self.get_metadata(filenames=(filename,))
+        if ids is not None:
+            filenames = self._ids_to_filenames(ids=ids)
+
+        metadata_list = []
+        for filename in filenames:
+            metadata_list.append(self.get_metadata(filenames=(filename,)))
+        return SpectrumArray.from_files(filenames=filenames, metadata_list=metadata_list, shared_memory=shared_memory)
 
     def insert(self, spectra, filenames, origin="Undefined", metadata_list=None, overwrite=False):
         """
         Insert the spectra from a SpectrumArray object into this spectrum library.
         
         :param spectra: 
-            A SpectrumArray object contain the spectra to be inserted into this spectrum library.
+            A SpectrumArray or single Spectrum object containing the spectra to be inserted into this spectrum library.
             
         :type spectra:
-            SpectrumArray
+            SpectrumArray or Spectrum
             
         :param filenames:
-            A list of the filenames with which to save the spectra contained within this SpectrumArray
+            A list of the filenames with which to save the spectra contained within this SpectrumArray, or a single
+            string if only one spectrum is being inserted.
             
         :type filenames:
-            List of str
+            List[str] or str
             
         :param origin: 
             A string describing where these spectra are being imported from. Normally the name of the module which is
@@ -578,10 +615,11 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
             str
             
         :param metadata_list: 
-            A list of dictionaries of metadata to set on each of the spectra in this SpectrumArray.
+            A list of dictionaries of metadata to set on each of the spectra in this SpectrumArray, or a single
+            dictionary to set the same metadata on all spectra, or None to set no metadata.
             
         :type metadata_list:
-            List of dict
+            List[dict] or Dict or None
             
         :param overwrite:
             Boolean flag indicating whether we're allowed to overwrite pre-existing spectra with the same filenames
@@ -593,13 +631,29 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
             None
         """
 
+        # Sanity check input
+        if not isinstance(filenames, (list, tuple)):
+            filenames = [filenames]
+        if not isinstance(metadata_list, (list, tuple)):
+            metadata_list = [metadata_list] * len(filenames)
+
+        assert len(filenames) == len(metadata_list), "Inconsistent number of items being inserted."
+
+        if isinstance(spectra, Spectrum):
+            assert len(filenames) == 1
+        elif isinstance(spectra, SpectrumArray):
+            assert len(spectra) == len(filenames), "Inconsistent number of items being inserted."
+        else:
+            raise TypeError("Argument 'spectra' must be either a Spectrum or a SpectrumArray.")
+
         # Fetch the numerical id of the origin of these spectra
         origin_id = self._fetch_origin_id(origin)
 
         # Insert each spectrum in turn
-        for filename, spectrum, metadata in zip(filenames, spectra, metadata_list):
+        for index, (filename, metadata) in enumerate(zip(filenames, metadata_list)):
 
             # Write spectrum to text file
+            spectrum = spectra if isinstance(spectra, Spectrum) else spectra.extract_item(index)
             spectrum.to_file(filename=filename, overwrite=overwrite)
 
             # Create database entry a spectrum
@@ -609,5 +663,6 @@ REPLACE INTO spectra (filename, originId, importTime)
             """, (filename, origin_id))
 
             # Set metadata on this spectrum
+            self.set_metadata(filenames=(filename,), metadata=spectrum.metadata)
             if metadata is not None:
                 self.set_metadata(filenames=(filename,), metadata=metadata)

@@ -58,12 +58,28 @@ class SpectrumArray(object):
             bool
         """
 
+        # Sanity check inputs
+        assert wavelengths.shape[0] == values.shape[1], "Inconsistent number of wavelength samples."
+        assert wavelengths.shape[0] == value_errors.shape[1], "Inconsistent number of wavelength samples."
+        assert values.shape[0] == value_errors.shape[1], "Inconsistent number of spectra in SpectrumArray."
+        assert len(metadata_list) == values.shape[0], "Inconsistent number of spectra in SpectrumArray."
+
+        # Store inputs as instance variables
         self.wavelengths = wavelengths
         self.values = values
         self.value_errors = value_errors
         self.metadata_list = metadata_list
         self.shared_memory = shared_memory
         self._update_raster_hash()
+
+    def __len__(self):
+        """
+        Return the number of spectra in this SpectrumArray.
+        
+        :return:
+            Integer number of spectra in this SpectrumArray.
+        """
+        return self.values.shape[0]
 
     @classmethod
     def from_files(cls, filenames, metadata_list, shared_memory=False):
@@ -169,7 +185,7 @@ class SpectrumArray(object):
         """
 
         # Check that requested index is within range
-        assert 0 <= index < self.values.shape[0], "Index of SpectrumArray out of range."
+        assert 0 <= index < len(self), "Index of SpectrumArray out of range."
 
         return Spectrum(wavelengths=self.wavelengths,
                         values=self.values[index, :],
