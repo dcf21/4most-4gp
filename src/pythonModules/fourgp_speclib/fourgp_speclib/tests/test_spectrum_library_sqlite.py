@@ -27,9 +27,9 @@ class TestSpectrumLibrarySQLiteCreation(unittest.TestCase):
         """
         Test that we can create multiple SpectrumLibraries at once.
         """
-        unique_filename_1 = uuid.uuid4()
+        unique_filename_1 = str(uuid.uuid4())
         db_path_1 = os_path.join("/tmp", "speclib_test_{}".format(unique_filename_1))
-        unique_filename_2 = uuid.uuid4()
+        unique_filename_2 = str(uuid.uuid4())
         db_path_2 = os_path.join("/tmp", "speclib_test_{}".format(unique_filename_2))
         lib_1 = fourgp_speclib.SpectrumLibrarySqlite(path=db_path_1, create=True)
         lib_2 = fourgp_speclib.SpectrumLibrarySqlite(path=db_path_2, create=True)
