@@ -3,6 +3,7 @@
 
 import os
 from os import path as os_path
+import re
 import sqlite3
 
 from spectrum_library_sql import SpectrumLibrarySql
@@ -55,9 +56,11 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
         assert not os_path.exists(db_path),\
             "Attempting to overwrite SQLite database <{}> that already exists.".format(db_path)
 
+        # SQLite databases work faster if primary keys don't auto increment, so remove keyword from schema
         db = sqlite3.connect(db_path)
         c = db.cursor()
-        c.executescript(self._schema)
+        schema = re.sub("AUTO_INCREMENT", "", self._schema)
+        c.executescript(schema)
         db.commit()
         db.close()
 

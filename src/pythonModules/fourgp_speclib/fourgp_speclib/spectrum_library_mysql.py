@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import MySQLdb
+import os
 import re
+import MySQLdb
 
 from spectrum_library_sql import SpectrumLibrarySql
 
@@ -24,7 +25,8 @@ class SpectrumLibraryMySql(SpectrumLibrarySql):
         Hostname of the MySQL server
     """
 
-    def __init__(self, path, create=False, db_user="fourgp", db_passwd="fourgp", db_name="fourgp", db_host="localhost"):
+    def __init__(self, path, create=False, purge_db=False,
+                 db_user="fourgp", db_passwd="fourgp", db_name="fourgp", db_host="localhost"):
         """
         Create a new SpectrumLibrary object, storing metadata about the spectra in a MySQL database.
         
@@ -39,6 +41,13 @@ class SpectrumLibraryMySql(SpectrumLibrarySql):
             doesn't exist.
         
         :type create:
+            bool
+         
+        :param purge_db:
+            If true, wipe the database clean and start a new schema. Warning: This will trash everything in the
+            database, including any other SpectrumLibraries which share the same MySQL database.
+        
+        :type purge_db:
             bool
             
         :param db_user:
@@ -70,6 +79,7 @@ class SpectrumLibraryMySql(SpectrumLibrarySql):
         self._db_passwd = db_passwd
         self._db_name = db_name
         self._db_host = db_host
+        self._purge_db = purge_db
 
         self._db = None
         self._db_cursor = None
@@ -84,10 +94,27 @@ class SpectrumLibraryMySql(SpectrumLibrarySql):
             None
         """
 
+        # If we've been asked the purge the database, do that now
+        if self._purge_db:
+            db = MySQLdb.connect(host=self._db_host, user=self._db_user, passwd=self._db_passwd, db=self._db_name)
+            c = db.cursor(cursorclass=MySQLdb.cursors.DictCursor)
+            c.execute("DROP DATABASE IF EXISTS {};".format(self._db_name))
+            c.execute("CREATE DATABASE {};".format(self._db_name))
+            db.commit()
+            db.close()
+
         # Create MySQL database to hold metadata about the spectra in this library
         db = MySQLdb.connect(host=self._db_host, user=self._db_user, passwd=self._db_passwd, db=self._db_name)
         c = db.cursor(cursorclass=MySQLdb.cursors.DictCursor)
-        c.executescript(self._schema)
+
+        # Test if database tables have already been set up. If not, build database from scratch
+        try:
+            c.execute("SELECT 1 FROM libraries;")
+        except MySQLdb.ProgrammingError:
+            for line in self._schema.split(";"):
+                line = line.strip()
+                if line:
+                    c.execute(line)
         db.commit()
         db.close()
 
@@ -99,5 +126,5 @@ class SpectrumLibraryMySql(SpectrumLibrarySql):
     def _parameterised_query(self, sql, parameters=None):
         if parameters is None:
             parameters = ()
-        sql = re.sub("?", "%s", sql)
+        sql = re.sub(r"\?", r"%s", sql)
         self._db_cursor.execute(sql, parameters)

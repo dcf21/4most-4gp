@@ -40,19 +40,19 @@ class SpectrumLibrarySql(SpectrumLibrary):
 
 -- Table of spectrum libraries using this database
 CREATE TABLE libraries (
-    libraryId INTEGER PRIMARY KEY,
+    libraryId INTEGER PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(1024) UNIQUE NOT NULL
 );
 
 -- Table of string descriptions of which tools imported particular spectra into the library 
 CREATE TABLE origins (
-    originId INTEGER PRIMARY KEY,
+    originId INTEGER PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(256) UNIQUE NOT NULL
 );
 
 -- Table of spectra within this library
 CREATE TABLE spectra (
-    specId INTEGER PRIMARY KEY,
+    specId INTEGER PRIMARY KEY AUTO_INCREMENT,
     libraryId INTEGER NOT NULL,
     filename VARCHAR(256) UNIQUE NOT NULL,
     originId INTEGER NOT NULL,
@@ -66,7 +66,7 @@ CREATE INDEX search_by_id ON spectra (libraryId, specId);
 
 -- Table of metadata fields which have been set on at least one spectrum
 CREATE TABLE metadata_fields (
-    fieldId INTEGER PRIMARY KEY,
+    fieldId INTEGER PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(32) UNIQUE NOT NULL
 );
 
@@ -77,6 +77,7 @@ CREATE TABLE spectrum_metadata (
     libraryId INTEGER NOT NULL,  -- this field is also in the record in <spectra>, but copied here for fast searching
     valueFloat REAL,
     valueString VARCHAR(256),
+    PRIMARY KEY (specId, fieldId),
     FOREIGN KEY (specId) REFERENCES spectra(specId) ON DELETE CASCADE,
     FOREIGN KEY (fieldId) REFERENCES metadata_fields(fieldId) ON DELETE CASCADE,
     FOREIGN KEY (libraryId) REFERENCES libraries (libraryId) ON DELETE CASCADE
@@ -176,7 +177,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
 
         # Create a random unique id for this library
         with open(os_path.join(self._path, "unique_id"), "w") as f:
-            unique_id = hashlib.md5(os.urandom(32).encode('hex')).hexdigest()
+            unique_id = hashlib.md5(os.urandom(32).encode("hex")).hexdigest()
             self._library_id = self._fetch_library_id(unique_id, True)
             f.write(unique_id)
 
@@ -227,7 +228,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         self._metadata_fields = []
         self._parameterised_query("SELECT fieldId, name FROM metadata_fields;")
         for item in self._db_cursor:
-            self._metadata_fields.append(item['name'])
+            self._metadata_fields.append(item["name"])
 
     def _fetch_library_id(self, name, add_record=False):
         """
@@ -262,7 +263,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
                 "Attempting to access a library which doesn't exist in the database."
 
             if results:
-                return results[0]['libraryId']
+                return results[0]["libraryId"]
 
             # If not, add it into the database
             self._parameterised_query("INSERT INTO libraries (name) VALUES (?);", (name,))
@@ -289,7 +290,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             self._parameterised_query("SELECT originId FROM origins WHERE name=?;", (name,))
             results = self._db_cursor.fetchall()
             if results:
-                return results[0]['originId']
+                return results[0]["originId"]
 
             # If not, add it into the database
             self._parameterised_query("INSERT INTO origins (name) VALUES (?);", (name,))
@@ -315,7 +316,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             self._parameterised_query("SELECT fieldId FROM metadata_fields WHERE name=?;", (name,))
             results = self._db_cursor.fetchall()
             if results:
-                return results[0]['fieldId']
+                return results[0]["fieldId"]
 
             # If not, add it into the database
             self._parameterised_query("INSERT INTO metadata_fields (name) VALUES (?);", (name,))
