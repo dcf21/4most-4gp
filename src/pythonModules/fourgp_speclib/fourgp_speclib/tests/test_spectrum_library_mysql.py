@@ -11,6 +11,8 @@ import unittest
 import numpy as np
 import fourgp_speclib
 
+from .test_spectrum_library_sql import TestSpectrumLibrarySQL
+
 # These tests require a test MySQL database to be present
 db_host = "localhost"
 db_user = "fourgp_unittest"
@@ -41,7 +43,7 @@ class TestSpectrumLibraryMySqlCreation(unittest.TestCase):
                                                 db_name=db_name, db_host=db_host)
 
 
-class TestSpectrumLibraryMySQL(unittest.TestCase):
+class TestSpectrumLibraryMySQL(unittest.TestCase, TestSpectrumLibrarySQL):
     def setUp(self):
         """
         Open connection to a clean SpectrumLibrary based on MySQL.
@@ -51,12 +53,6 @@ class TestSpectrumLibraryMySQL(unittest.TestCase):
         self._lib = fourgp_speclib.SpectrumLibraryMySql(path=self._db_path, create=True, purge_db=True,
                                                         db_user=db_user, db_passwd=db_passwd,
                                                         db_name=db_name, db_host=db_host)
-
-    def test_refresh(self):
-        """
-        Check that we can refresh database connection.
-        """
-        self._lib.refresh_database()
 
     def tearDown(self):
         """
