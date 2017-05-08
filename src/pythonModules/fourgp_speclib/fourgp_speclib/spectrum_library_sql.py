@@ -344,11 +344,14 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             list of int
         """
 
+        if len(filenames) == 0:
+            return []
+
         output = []
-        filename_strings = ["\"%s\""%re.sub("[^a-zA-Z0-9_-]","",i) for i in filenames]
+        filename_strings = ["\"%s\"" % re.sub("[^a-zA-Z0-9_-]", "", i) for i in filenames]
         self._parameterised_query("""
 SELECT specId FROM spectra WHERE libraryId=%s AND filename IN (%s);
-"""%(self._library_id, ",".join(filename_strings)))
+""" % (self._library_id, ",".join(filename_strings)))
 
         for item in self._db_cursor:
             output.append(item["specId"])
@@ -369,11 +372,14 @@ SELECT specId FROM spectra WHERE libraryId=%s AND filename IN (%s);
             list of str
         """
 
+        if len(ids) == 0:
+            return []
+
         output = []
         id_strings = [str(int(i)) for i in ids]
         self._parameterised_query("""
 SELECT filename FROM spectra WHERE libraryId=%s AND specId IN (%s);
-"""%(self._library_id, ",".join(id_strings)))
+""" % (self._library_id, ",".join(id_strings)))
 
         for item in self._db_cursor:
             output.append(item["filename"])
@@ -426,31 +432,32 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN (%s);
             # Check that requested metadata field exists
             assert key in self._metadata_fields, "Unknown metadata field <{}>.".format(key)
 
+            constraint = """s.specId IN (SELECT specId FROM spectrum_metadata 
+                                         WHERE libraryId=? AND
+                                               fieldId=(SELECT fieldId FROM metadata_fields WHERE name=?) AND
+                                               ({}) )"""
+            criteria_params.append(self._library_id)
+            criteria_params.append(key)
+
             # If constraint is specified as a list, it should be of the form [min, max]
             if isinstance(search_range, (list, tuple)):
                 assert len(search_range) == 2, \
                     "Search ranges must have two items, a minimum and a maximum. Supplied range has %d items." % \
                     (format(len(search_range)))
-                criteria.append("""
-EXISTS (SELECT 1
-    FROM spectrum_metadata i
-    INNER JOIN metadata_fields f ON f.fieldId = i.fieldId
-    WHERE f.libraryId={} AND f.name={} AND ((i.valueFloat BETWEEN ? AND ?) OR (i.valueString BETWEEN ? AND ?)) )
-                """.format(self._library_id, key))
-                criteria_params.append(min(search_range))
-                criteria_params.append(max(search_range))
+
+                if isinstance(search_range[0], (int, float)):
+                    criteria.append(constraint.format("valueFloat BETWEEN ? AND ?"))
+                else:
+                    criteria.append(constraint.format("valueString BETWEEN ? AND ?"))
                 criteria_params.append(min(search_range))
                 criteria_params.append(max(search_range))
 
             # If constraint is not a list or tuple, we must match its exact value
             else:
-                criteria.append("""
-EXISTS (SELECT 1
-    FROM spectrum_metadata i
-    INNER JOIN metadata_fields f ON f.fieldId = i.fieldId
-    WHERE f.libraryId={} AND f.name={} AND ((i.valueFloat = ?) OR (i.valueString = ?)) )
-                """.format(self._library_id, key))
-                criteria_params.append(search_range)
+                if isinstance(search_range, (int, float)):
+                    criteria.append(constraint.format("valueFloat = ?"))
+                else:
+                    criteria.append(constraint.format("valueString = ?"))
                 criteria_params.append(search_range)
 
         # Assemble our list of search criteria into an SQL query
