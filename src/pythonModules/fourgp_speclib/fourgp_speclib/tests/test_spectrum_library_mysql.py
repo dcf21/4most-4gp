@@ -18,6 +18,7 @@ db_user = "fourgp_unittest"
 db_passwd = "fourgp_unittest"
 db_name = "fourgp_unittest"
 
+
 class TestSpectrumLibraryMySqlCreation(unittest.TestCase):
     def test_database_creation(self):
         """
@@ -29,6 +30,23 @@ class TestSpectrumLibraryMySqlCreation(unittest.TestCase):
                                                   db_user=db_user, db_passwd=db_passwd,
                                                   db_name=db_name, db_host=db_host)
         lib.purge()
+
+    def test_multiple_libraries(self):
+        """
+        Test that we can create multiple SpectrumLibraries at once.
+        """
+        unique_filename_1 = uuid.uuid4()
+        db_path_1 = os_path.join("/tmp", "speclib_test_{}".format(unique_filename_1))
+        unique_filename_2 = uuid.uuid4()
+        db_path_2 = os_path.join("/tmp", "speclib_test_{}".format(unique_filename_2))
+        lib_1 = fourgp_speclib.SpectrumLibraryMySql(path=db_path_1,
+                                                    db_user=db_user, db_passwd=db_passwd,
+                                                    db_name=db_name, db_host=db_host)
+        lib_2 = fourgp_speclib.SpectrumLibraryMySql(path=db_path_2,
+                                                    db_user=db_user, db_passwd=db_passwd,
+                                                    db_name=db_name, db_host=db_host)
+        lib_1.purge()
+        lib_2.purge()
 
     def test_non_existent_database(self):
         """

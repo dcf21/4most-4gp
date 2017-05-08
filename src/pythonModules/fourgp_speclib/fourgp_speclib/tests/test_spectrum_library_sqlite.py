@@ -13,7 +13,6 @@ import fourgp_speclib
 from test_spectrum_library_sql import TestSpectrumLibrarySQL
 
 
-
 class TestSpectrumLibrarySQLiteCreation(unittest.TestCase):
     def test_database_creation(self):
         """
@@ -23,6 +22,19 @@ class TestSpectrumLibrarySQLiteCreation(unittest.TestCase):
         db_path = os_path.join("/tmp", "speclib_test_{}".format(unique_filename))
         lib = fourgp_speclib.SpectrumLibrarySqlite(path=db_path, create=True)
         lib.purge()
+
+    def test_multiple_libraries(self):
+        """
+        Test that we can create multiple SpectrumLibraries at once.
+        """
+        unique_filename_1 = uuid.uuid4()
+        db_path_1 = os_path.join("/tmp", "speclib_test_{}".format(unique_filename_1))
+        unique_filename_2 = uuid.uuid4()
+        db_path_2 = os_path.join("/tmp", "speclib_test_{}".format(unique_filename_2))
+        lib_1 = fourgp_speclib.SpectrumLibrarySqlite(path=db_path_1, create=True)
+        lib_2 = fourgp_speclib.SpectrumLibrarySqlite(path=db_path_2)
+        lib_1.purge()
+        lib_2.purge()
 
     def test_non_existent_database(self):
         """
