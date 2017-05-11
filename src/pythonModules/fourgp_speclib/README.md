@@ -1,6 +1,6 @@
-# 4gp_speclib
+# fourgp_speclib
 
-This python module defines classes representing arrays of spectra, and libraries to keep them in.
+This python package defines classes representing arrays of spectra, and libraries to keep them in.
 
 Spectrum libraries are a bit like having a directory full of data files on disk, each containing a spectrum. However, they also include a database which can store arbitrary metadata about each spectrum -- for example, stellar paramaters and abundances. It is possible to search a spectrum library based on metadata constraints.
 

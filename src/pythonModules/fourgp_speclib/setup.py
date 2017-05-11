@@ -12,6 +12,7 @@ if sys.argv[-1] == "publish":
     system("python setup.py sdist upload")
     sys.exit()
 
+
 def read(filename):
     kwds = {"encoding": "utf-8"} if sys.version_info[0] >= 3 else {}
     with open(filename, **kwds) as fp:

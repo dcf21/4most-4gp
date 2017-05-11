@@ -1,5 +1,6 @@
-# 4most-4gp
-Galactic pipeline for 4MOST
+# fourgp_cannon
+
+This package provides a simple wrapper for passing spectra in SpectrumLibraries to the Cannon.
 
 # Contact details
 This code is maintained by:

@@ -11,7 +11,6 @@ import logging
 from numpy import RankWarning
 from warnings import simplefilter
 
-
 from .spectrum_library_sqlite import SpectrumLibrarySqlite
 from .spectrum_library_mysql import SpectrumLibraryMySql
 from .spectrum_array import SpectrumArray

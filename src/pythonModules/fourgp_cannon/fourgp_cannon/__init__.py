@@ -7,7 +7,7 @@ import logging
 from numpy import RankWarning
 from warnings import simplefilter
 
-from . import spectrum_library_sqlite, spectrum, spectrum_polynomial
+from .cannon_instance import CannonInstance
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # TODO: Remove this when stable.

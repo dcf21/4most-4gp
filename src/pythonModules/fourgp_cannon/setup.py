@@ -12,6 +12,7 @@ if sys.argv[-1] == "publish":
     system("python setup.py sdist upload")
     sys.exit()
 
+
 def read(filename):
     kwds = {"encoding": "utf-8"} if sys.version_info[0] >= 3 else {}
     with open(filename, **kwds) as fp:
@@ -21,14 +22,14 @@ def read(filename):
 # Get the version information.
 here = path.abspath(path.dirname(__file__))
 vre = re_compile("__version__ = \"(.*?)\"")
-version = vre.findall(read(path.join(here, "fourgp_speclib", "__init__.py")))[0]
+version = vre.findall(read(path.join(here, "fourgp_cannon", "__init__.py")))[0]
 
 setup(
-    name="fourgp_speclib",
+    name="fourgp_cannon",
     version=version,
     author="Dominic Ford",
     author_email="dominic@astro.lu.se",
-    description="Spectrum library functions for 4MOST Galactic Pipeline",
+    description="Spectrum library functions for 4MOST Galactic Pipeline: Wrapper for the Cannon",
     long_description=read(path.join(here, "README.md")),
     url="https://www.4most.eu/",
     license="MIT",
@@ -44,7 +45,7 @@ setup(
     ],
     keywords="4MOST Galactic Pipeline",
     packages=find_packages(exclude=["documents", "tests"]),
-    install_requires=["numpy", "scipy", "six", "sharedmem"],
+    install_requires=["numpy", "scipy"],
     extras_require={
         "test": ["coverage"]
     },

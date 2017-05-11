@@ -179,6 +179,21 @@ class SpectrumArray(object):
         """
         self.raster_hash = hash_numpy_array(self.wavelengths)
 
+    def get_metadata(self, index):
+        """
+        Extract the metadata which we have on a single spectrum from a SpectrumArray.
+        
+        :param index:
+            Index of the spectrum to extract
+            
+        :type index:
+            int
+            
+        :return:
+            dict
+        """
+        return self.metadata_list[index]
+
     def extract_item(self, index):
         """
         Extract a single spectrum from a SpectrumArray. This creates a numpy view of the spectrum, without copying the
@@ -199,4 +214,5 @@ class SpectrumArray(object):
 
         return Spectrum(wavelengths=self.wavelengths,
                         values=self.values[index, :],
-                        value_errors=self.value_errors[index, :])
+                        value_errors=self.value_errors[index, :],
+                        metadata=self.metadata_list[index])
