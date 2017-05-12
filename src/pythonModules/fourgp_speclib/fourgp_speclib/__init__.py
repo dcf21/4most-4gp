@@ -15,6 +15,7 @@ from .spectrum_library_sqlite import SpectrumLibrarySqlite
 from .spectrum_library_mysql import SpectrumLibraryMySql
 from .spectrum_array import SpectrumArray
 from .spectrum import Spectrum
+from .spectrum_polynomial import SpectrumPolynomial
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # TODO: Remove this when stable.
