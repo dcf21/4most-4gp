@@ -47,6 +47,7 @@ class SpectrumPolynomial(Spectrum):
         """
         self.terms = terms
         self.wavelengths = wavelengths
+        self._coefficients = (0,) * (self._terms + 1)
 
         super(SpectrumPolynomial, self).__init__(wavelengths=wavelengths,
                                                  values=self.values,
@@ -68,7 +69,7 @@ class SpectrumPolynomial(Spectrum):
         self._terms = value
 
         # Initialise polynomial coefficients to zero
-        self.coefficients = [0] * (self._terms + 1)
+        self.coefficients = (0,) * (self._terms + 1)
 
     @property
     def coefficients(self):

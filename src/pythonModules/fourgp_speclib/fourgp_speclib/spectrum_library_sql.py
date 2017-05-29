@@ -90,7 +90,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
     
     """
 
-    def __init__(self, path, create=False):
+    def __init__(self, path, create=False, gzip_spectra=True):
         """
         Create a new SpectrumLibrary object, storing metadata about the spectra in an SQL database.
         
@@ -105,6 +105,12 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             doesn't exist.
         
         :type create:
+            bool
+
+        :param gzip_spectra:
+            If true, we store spectra on disk in gzipped text files. This reduces file size by 90%.
+
+        :type gzip_spectra:
             bool
         """
 
@@ -348,13 +354,16 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             return []
 
         output = []
-        filename_strings = ["\"%s\"" % re.sub("[^a-zA-Z0-9_-]", "", i) for i in filenames]
+        filename_strings = ["\"%s\"" % re.sub(r"[^a-zA-Z0-9_\-\.]", "", i) for i in filenames]
         self._parameterised_query("""
-SELECT specId FROM spectra WHERE libraryId=%s AND filename IN (%s);
-""" % (self._library_id, ",".join(filename_strings)))
+SELECT specId FROM spectra WHERE libraryId={} AND filename IN ({});
+""".format(self._library_id, ",".join(filename_strings)))
 
         for item in self._db_cursor:
             output.append(item["specId"])
+
+        assert len(output) == len(filenames), "Some of the requested filenames did not exist in database. " \
+                                              "Matched {} of {} filenames.".format(len(output), len(filenames))
         return output
 
     def _ids_to_filenames(self, ids):
@@ -499,7 +508,7 @@ WHERE {};""".format(" AND ".join(criteria))
         output = []
 
         # Loop over the spectra we are querying
-        for id in ids:
+        for id_no in ids:
 
             # Start building a dictionary of metadata
             item = {}
@@ -510,11 +519,11 @@ SELECT f.name, CASE WHEN i.valueFloat IS NOT NULL THEN i.valueFloat ELSE i.value
 FROM spectrum_metadata i
 INNER JOIN metadata_fields f ON f.fieldId=i.fieldId
 WHERE i.libraryId=? AND i.specId=?;
-            """, (self._library_id, id))
+            """, (self._library_id, id_no))
 
             # Enter metadata into dictionary
             for entry in self._db_cursor:
-                item[entry["name"]] = entry["value"]
+                item[str(entry["name"])] = entry["value"]
 
             output.append(item)
 
@@ -606,15 +615,14 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
         if ids is not None:
             filenames = self._ids_to_filenames(ids=ids)
 
-        metadata_list = []
-        for filename in filenames:
-            metadata_list.append(self.get_metadata(filenames=(filename,)))
+        metadata_list = self.get_metadata(filenames=filenames)
+
         return SpectrumArray.from_files(path=self._path,
                                         filenames=filenames,
                                         metadata_list=metadata_list,
                                         shared_memory=shared_memory)
 
-    def insert(self, spectra, filenames, origin="Undefined", metadata_list=None, overwrite=False):
+    def insert(self, spectra, filenames=None, origin="Undefined", metadata_list=None, overwrite=False):
         """
         Insert the spectra from a SpectrumArray object into this spectrum library.
         
@@ -626,7 +634,8 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
             
         :param filenames:
             A list of the filenames with which to save the spectra contained within this SpectrumArray, or a single
-            string if only one spectrum is being inserted.
+            string if only one spectrum is being inserted. This is optional: if it is not specified, a random filename
+            is generated.
             
         :type filenames:
             List[str] or str
@@ -674,7 +683,15 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
         origin_id = self._fetch_origin_id(origin)
 
         # Insert each spectrum in turn
-        for index, (filename, metadata) in enumerate(zip(filenames, metadata_list)):
+        for index, (filename_stub, metadata) in enumerate(zip(filenames, metadata_list)):
+
+            # Add suffix to filename to ensure it is unique, and it is gzipped if requested
+            if filename_stub is None:
+                filename_stub = hashlib.md5(os.urandom(32).encode("hex")).hexdigest()[:16]
+            random_key = hashlib.md5(os.urandom(32).encode("hex")).hexdigest()[:8]
+            filename = "{}.{}.spec".format(filename_stub, random_key)
+            if self._gzip:
+                filename += ".gz"
 
             # Write spectrum to text file
             spectrum = spectra if isinstance(spectra, Spectrum) else spectra.extract_item(index)

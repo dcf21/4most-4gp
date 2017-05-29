@@ -4,7 +4,7 @@
 import numpy as np
 from multiprocessing import cpu_count
 import logging
-from astropy import Table
+from astropy.table import Table
 import AnniesLasso as tc
 
 import fourgp_speclib
@@ -18,7 +18,7 @@ class CannonInstance(object):
     loaded from 4GP SpectrumLibrary objects.
     """
 
-    def __init__(self, training_set, label_names, threads=None):
+    def __init__(self, training_set, label_names, censors=None, progress_bar=False, threads=None):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
         
@@ -29,6 +29,7 @@ class CannonInstance(object):
         assert isinstance(training_set, fourgp_speclib.SpectrumArray), \
             "Training set for the Cannon should be a SpectrumArray."
         self._training_set = training_set
+        self._progress_bar = progress_bar
 
         # Work out how many CPUs we should allow the Cannon to use
         if threads is None:
@@ -42,6 +43,14 @@ class CannonInstance(object):
         inverse_variances[ignore] = 0
         training_set.values[ignore] = 1
 
+        # Check that labels are correctly set in metadata
+        for index in range(len(training_set)):
+            metadata = training_set.get_metadata(index)
+            for label in label_names:
+                assert label in metadata, "Label <{}> not set on training spectrum number {}. " \
+                                          "Labels on this spectrum are: {}.".format(
+                    label, index, ", ".join(metadata.keys()))
+
         # Compile table of training values of labels from metadata contained in SpectrumArray
         training_label_values = Table(names=label_names,
                                       rows=[[training_set.get_metadata(index)[label] for label in label_names]
@@ -53,14 +62,20 @@ class CannonInstance(object):
                                                   dispersion=training_set.wavelengths,
                                                   threads=threads)
 
-        self._model.s2 = 0
-        self._model.regularization = 0
         self._model.vectorizer = tc.vectorizer.NormalizedPolynomialVectorizer(
             labelled_set=training_label_values,
             terms=tc.vectorizer.polynomial.terminator(label_names, 2)
         )
 
-        self._model.train()
+        if censors is not None:
+            self._model.censors = censors
+
+        self._model.s2 = 0
+        self._model.regularization = 0
+
+        logger.info("Starting to train the Cannon")
+        self._model.train(progressbar=self._progress_bar)
+        logger.info("Cannon training completed")
         self._model._set_s2_by_hogg_heuristic()
 
     def fit_spectrum(self, spectrum):
@@ -77,12 +92,12 @@ class CannonInstance(object):
         """
 
         assert isinstance(spectrum, fourgp_speclib.Spectrum), \
-        "Supplied spectrum for the Cannon to fit is not a Spectrum object."
+            "Supplied spectrum for the Cannon to fit is not a Spectrum object."
 
         assert spectrum.raster_hash == self._training_set.raster_hash, \
-        "Supplied spectrum for the Cannon to fit is not sampled on the same raster as the training set."
+            "Supplied spectrum for the Cannon to fit is not sampled on the same raster as the training set."
 
-        inverse_variances = spectrum.value_errors**(-2)
+        inverse_variances = spectrum.value_errors ** (-2)
 
         # Ignore bad pixels.
         bad = (spectrum.value_errors < 0) + (~np.isfinite(inverse_variances * spectrum.values))

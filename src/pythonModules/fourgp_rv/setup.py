@@ -21,14 +21,14 @@ def read(filename):
 # Get the version information.
 here = path.abspath(path.dirname(__file__))
 vre = re_compile("__version__ = \"(.*?)\"")
-version = vre.findall(read(path.join(here, "fourgp_speclib", "__init__.py")))[0]
+version = vre.findall(read(path.join(here, "fourgp_rv", "__init__.py")))[0]
 
 setup(
-    name="fourgp_speclib",
+    name="fourgp_rv",
     version=version,
     author="Dominic Ford",
     author_email="dominic@astro.lu.se",
-    description="Spectrum library functions for 4MOST Galactic Pipeline",
+    description="Radial velocity forward-modelling for 4MOST Galactic Pipeline",
     long_description=read(path.join(here, "README.md")),
     url="https://www.4most.eu/",
     license="MIT",
