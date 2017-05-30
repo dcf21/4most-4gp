@@ -171,9 +171,8 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             raise
 
         # Initialise
-        self._metadata_init()
-
         super(SpectrumLibrarySql, self).__init__()
+        self._metadata_init()
 
     def _create(self):
         """
