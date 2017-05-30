@@ -19,7 +19,7 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
 
     _index_file_name = "index.db"
 
-    def __init__(self, path, create=False):
+    def __init__(self, path, create=False, gzip_spectra=True, binary_spectra=True):
         """
         Create a new SpectrumLibrary object, storing metadata about the spectra in an SQLite database.
         
@@ -35,12 +35,29 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
         
         :type create:
             bool
+
+        :param gzip_spectra:
+            If true, we store spectra on disk in gzipped text files. This reduces file size by 90%.
+            This setting is a property of stored when new libraries are created, and the argument is ignored if
+            we are not creating a new library.
+
+        :type gzip_spectra:
+            bool
+
+        :param binary_spectra:
+            If true, we store spectra on disk in binary format.
+            This setting is a property of stored when new libraries are created, and the argument is ignored if
+            we are not creating a new library.
+
+        :type binary_spectra:
+            bool
         """
 
         self._db = None
         self._db_cursor = None
 
-        super(SpectrumLibrarySqlite, self).__init__(path=path, create=create)
+        super(SpectrumLibrarySqlite, self).__init__(path=path, create=create,
+                                                    gzip_spectra=gzip_spectra, binary_spectra=binary_spectra)
 
     def _create_database(self):
         """

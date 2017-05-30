@@ -5,6 +5,7 @@ import os
 from os import path as os_path
 import re
 import time
+import json
 import hashlib
 import logging
 
@@ -90,7 +91,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
     
     """
 
-    def __init__(self, path, create=False, gzip_spectra=True):
+    def __init__(self, path, create=False, gzip_spectra=True, binary_spectra=True):
         """
         Create a new SpectrumLibrary object, storing metadata about the spectra in an SQL database.
         
@@ -109,13 +110,25 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
 
         :param gzip_spectra:
             If true, we store spectra on disk in gzipped text files. This reduces file size by 90%.
+            This setting is a property of stored when new libraries are created, and the argument is ignored if
+            we are not creating a new library.
 
         :type gzip_spectra:
+            bool
+
+        :param binary_spectra:
+            If true, we store spectra on disk in binary format.
+            This setting is a property of stored when new libraries are created, and the argument is ignored if
+            we are not creating a new library.
+
+        :type binary_spectra:
             bool
         """
 
         # Create new spectrum library if requested
         self._path = path
+        self._gzip = gzip_spectra
+        self._binary_spectra = binary_spectra
         if create:
             self._create()
 
@@ -126,23 +139,34 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         if not create:
             self._db, self._db_cursor = self._open_database()
 
+        # Read the metadata about this spectrum library
         try:
-            # Check that this library uses the right flavour of SQL
-            with open(os_path.join(self._path, "type_id")) as f:
+            with open(os_path.join(self._path, "library_props")) as f:
+                library_props = json.loads(f.read())
+
+                # Check that this library uses the right flavour of SQL
+                library_type = library_props['type_id']
                 expected_library_type = type(self).__name__
-                library_type = f.read()
                 assert library_type == expected_library_type, \
                     "This library was created with class <%{}>. Cannot open with class <{}>.".format(
                         library_type, expected_library_type)
 
-            # Look up numeric Id for this particular spectrum library in the database
-            # Some SQL implementations (e.g. MySQL) share multiple spectrum libraries in a single database. Others
-            # (e.g. SQLite) have a separate database for each spectrum library
-            with open(os_path.join(self._path, "unique_id")) as f:
-                self._unique_id = f.read().strip()
+                # Look up numeric Id for this particular spectrum library in the database
+                # Some SQL implementations (e.g. MySQL) share multiple spectrum libraries in a single database. Others
+                # (e.g. SQLite) have a separate database for each spectrum library
+                self._unique_id = library_props['unique_id']
                 self._library_id = self._fetch_library_id(self._unique_id, False)
 
-        except IOError:
+                # Check the data format used to store spectra
+                self._gzip = self._binary_spectra = False
+                if library_props['format'] == 'txt.gzip':
+                    self._gzip = True
+                elif library_props['format'] == 'bin':
+                    self._binary_spectra = True
+                elif library_props['format'] != 'txt':
+                    raise ValueError, "Unexpected data format <{}>".format(library_props['format'])
+
+        except (IOError, KeyError, ValueError):
             logger.error("Spectrum library did not have required header files.")
             raise
 
@@ -178,16 +202,28 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         self._create_database()
         self._db, self._db_cursor = self._open_database()
 
-        # Record the database format used by this library
-        with open(os_path.join(self._path, "type_id"), "w") as f:
-            library_type = type(self).__name__
-            f.write(library_type)
+        # Record metadata about this spectrum library
+        with open(os_path.join(self._path, "library_props"), "w") as f:
 
-        # Create a random unique id for this library
-        with open(os_path.join(self._path, "unique_id"), "w") as f:
+            # Record the database format used by this library
+            library_type = type(self).__name__
+
+            # Create a random unique id for this library
             unique_id = hashlib.md5(os.urandom(32).encode("hex")).hexdigest()
             self._library_id = self._fetch_library_id(unique_id, True)
-            f.write(unique_id)
+
+            # Document the file format used to store spectra
+            format_id = "txt"
+            if self._gzip:
+                format_id = "txt.gzip"
+            if self._binary_spectra:
+                format_id = "bin"
+
+            f.write(json.dumps({
+                'type_id': library_type,
+                'unique_id': unique_id,
+                'format': format_id
+            }))
 
         self._db.commit()
 
@@ -408,8 +444,7 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN (%s);
             os.unlink(os_path.join(self._path, item["filename"]))
 
         # Delete id files
-        os.unlink(os_path.join(self._path, "unique_id"))
-        os.unlink(os_path.join(self._path, "type_id"))
+        os.unlink(os_path.join(self._path, "library_props"))
 
         # Delete database entries
         self._parameterised_query("DELETE FROM libraries WHERE libraryId=?;", (self._library_id,))
@@ -515,7 +550,7 @@ WHERE {};""".format(" AND ".join(criteria))
 
             # Search the database for metadata
             self._parameterised_query("""
-SELECT f.name, CASE WHEN i.valueFloat IS NOT NULL THEN i.valueFloat ELSE i.valueString END AS value
+SELECT f.name, i.valueFloat, i.valueString
 FROM spectrum_metadata i
 INNER JOIN metadata_fields f ON f.fieldId=i.fieldId
 WHERE i.libraryId=? AND i.specId=?;
@@ -523,7 +558,11 @@ WHERE i.libraryId=? AND i.specId=?;
 
             # Enter metadata into dictionary
             for entry in self._db_cursor:
-                item[str(entry["name"])] = entry["value"]
+                key = str(entry["name"])  # Need str() here as SQL returns unicode strings
+                if entry["valueFloat"] is not None:
+                    item[key] = entry["valueFloat"]
+                else:
+                    item[key] = entry["valueString"]
 
             output.append(item)
 
@@ -619,6 +658,7 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
 
         return SpectrumArray.from_files(path=self._path,
                                         filenames=filenames,
+                                        binary=self._binary_spectra,
                                         metadata_list=metadata_list,
                                         shared_memory=shared_memory)
 
@@ -690,12 +730,16 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
                 filename_stub = hashlib.md5(os.urandom(32).encode("hex")).hexdigest()[:16]
             random_key = hashlib.md5(os.urandom(32).encode("hex")).hexdigest()[:8]
             filename = "{}.{}.spec".format(filename_stub, random_key)
-            if self._gzip:
+            if self._binary_spectra:
+                filename += ".npy"
+            elif self._gzip:
                 filename += ".gz"
 
             # Write spectrum to text file
             spectrum = spectra if isinstance(spectra, Spectrum) else spectra.extract_item(index)
-            spectrum.to_file(filename=os_path.join(self._path, filename), overwrite=overwrite)
+            spectrum.to_file(filename=os_path.join(self._path, filename),
+                             overwrite=overwrite,
+                             binary=self._binary_spectra)
 
             # Create database entry a spectrum
             self._parameterised_query("""

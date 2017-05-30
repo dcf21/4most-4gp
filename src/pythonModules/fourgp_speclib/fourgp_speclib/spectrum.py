@@ -114,7 +114,7 @@ class Spectrum(object):
         self._update_raster_hash()
 
     @classmethod
-    def from_file(cls, filename, *args, **kwargs):
+    def from_file(cls, filename, binary=True, *args, **kwargs):
         """
         Factory method to read a spectrum in from a text file.
         
@@ -123,6 +123,12 @@ class Spectrum(object):
             
         :type filename:
             str
+
+        :param binary:
+            Boolean specifying whether we store spectra on disk in binary format or plain text.
+
+        :type binary:
+            bool
             
         :return:
             Spectrum object
@@ -130,10 +136,14 @@ class Spectrum(object):
 
         assert os_path.exists(filename), "File <{}> does not exist.".format(filename)
 
-        wavelengths, values, value_errors = np.loadtxt(filename).T
+        if not binary:
+            wavelengths, values, value_errors = np.loadtxt(filename).T
+        else:
+            wavelengths, values, value_errors = np.load(filename)
+
         return cls(wavelengths=wavelengths, values=values, value_errors=value_errors, *args, **kwargs)
 
-    def to_file(self, filename, overwrite=False):
+    def to_file(self, filename, binary=True, overwrite=False):
         """
         Dump a spectrum object to a text file, with three columns containing wavelengths, data values, and errors.
         
@@ -143,9 +153,15 @@ class Spectrum(object):
         :type filename:
             str
             
+        :param binary:
+            Boolean specifying whether we store spectra on disk in binary format or plain text.
+            
+        :type binary:
+            bool
+
         :param overwrite:
             Boolean specifying whether we're allowed to overwrite existing files.
-            
+
         :type overwrite:
             bool
             
@@ -156,7 +172,11 @@ class Spectrum(object):
         if os_path.exists(filename) and not overwrite:
             logger.error("File <{}> already exists. Set overwrite API option to force overwriting of it.".format(
                 filename))
-        np.savetxt(filename, np.transpose([self.wavelengths, self.values, self.value_errors]))
+
+        if not binary:
+            np.savetxt(filename, np.transpose([self.wavelengths, self.values, self.value_errors]))
+        else:
+            np.save(filename, np.asarray([self.wavelengths, self.values, self.value_errors]))
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,

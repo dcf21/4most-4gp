@@ -82,7 +82,7 @@ class SpectrumArray(object):
         return self.values.shape[0]
 
     @classmethod
-    def from_files(cls, filenames, metadata_list, path="", shared_memory=False):
+    def from_files(cls, filenames, metadata_list, path="", binary=True, shared_memory=False):
         """
         Instantiate new SpectrumArray object, using data in a list of text files.
         
@@ -101,6 +101,12 @@ class SpectrumArray(object):
             
         :param metadata_list:
             A list of dictionaries of metadata about each of the spectra in this SpectrumArray
+
+        :param binary:
+            Boolean specifying whether we store spectra on disk in binary format or plain text.
+
+        :type binary:
+            bool
             
         :param shared_memory:
             Boolean flag indicating whether this SpectrumArray should use multiprocessing shared memory.
@@ -114,7 +120,11 @@ class SpectrumArray(object):
 
         # Load first spectrum to work out what wavelength raster we're using
         assert len(filenames) > 0, "Cannot open a SpectrumArray with no members: there is no wavelength raster"
-        wavelengths, item_values, item_value_errors = np.loadtxt(os_path.join(path, filenames[0])).T
+
+        if not binary:
+            wavelengths, item_values, item_value_errors = np.loadtxt(os_path.join(path, filenames[0])).T
+        else:
+            wavelengths, item_values, item_value_errors = np.load(os_path.join(path, filenames[0]))
         raster_hash = hash_numpy_array(wavelengths)
 
         # Allocate numpy array to store this SpectrumArray into
@@ -145,7 +155,12 @@ class SpectrumArray(object):
         for i, filename in enumerate(filenames):
             filename = os_path.join(path, filename)
             assert os_path.exists(filename), "File <{}> does not exist.".format(filename)
-            item_wavelengths, item_values, item_value_errors = np.loadtxt(filename).T
+
+            if not binary:
+                item_wavelengths, item_values, item_value_errors = np.loadtxt(filename).T
+            else:
+                item_wavelengths, item_values, item_value_errors = np.load(filename)
+
             assert hash_numpy_array(item_wavelengths) == raster_hash, \
                 "Item <{}> has a different wavelength raster from preceding spectra in SpectrumArray.".format(
                     filename)

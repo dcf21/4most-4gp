@@ -42,7 +42,8 @@ class TestSpectrumLibrarySQL(object):
         self._lib.insert(input_spectrum, "dummy_filename")
 
         # Load it back as a SpectrumArray
-        my_spectrum_array = self._lib.open(filenames=["dummy_filename"])
+        my_spectra = self._lib.search()
+        my_spectrum_array = self._lib.open(filenames=my_spectra[0]['filename'])
 
         # Pick spectrum out of SpectrumArray
         my_spectrum = my_spectrum_array.extract_item(0)
@@ -65,7 +66,7 @@ class TestSpectrumLibrarySQL(object):
 
         # Search on an item of metadata which doesn't exist
         with self.assertRaises(AssertionError):
-            my_spectra = self._lib.search(x_value=23)
+            self._lib.search(x_value=23)
 
     def test_search_1d_numerical_range(self):
         """
@@ -85,13 +86,14 @@ class TestSpectrumLibrarySQL(object):
 
         # Search for spectra with x in a defined range
         x_range = [4.5, 8.5]
-        filenames_expected = ["x_{}".format(x) for x in x_values if (x > x_range[0] and x < x_range[1])]
+        x_values_expected = [x for x in x_values if (x > x_range[0] and x < x_range[1])]
         my_spectra = self._lib.search(x_value=x_range)
-        filenames_got = [str(item["filename"]) for item in my_spectra]
-        filenames_got.sort()
+        ids = [str(item["specId"]) for item in my_spectra]
+        metadata = self._lib.get_metadata(ids=ids)
+        x_values = [item['x_value'] for item in metadata]
 
         # Check that we got back the same spectrum we put in
-        self.assertEqual(filenames_expected, filenames_got)
+        self.assertEqual(x_values, x_values_expected)
 
     def test_search_1d_numerical_value(self):
         """
@@ -111,10 +113,12 @@ class TestSpectrumLibrarySQL(object):
 
         # Search for spectra with matching x_value
         my_spectra = self._lib.search(x_value=5)
-        filenames_got = [str(item["filename"]) for item in my_spectra]
+        ids = [str(item["specId"]) for item in my_spectra]
+        metadata = self._lib.get_metadata(ids=ids)
+        x_values = [item['x_value'] for item in metadata]
 
         # Check that we got back the same spectrum we put in
-        self.assertEqual(filenames_got, ["x_5"])
+        self.assertEqual(x_values, [5])
 
     def test_search_1d_string_range(self):
         """

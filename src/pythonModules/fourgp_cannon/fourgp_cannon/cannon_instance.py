@@ -107,6 +107,7 @@ class CannonInstance(object):
         labels, cov, meta = self._model.fit(
             normalized_flux=spectrum.values,
             normalized_ivar=inverse_variances,
+            progressbar=False,
             full_output=True)
 
         return labels, cov, meta

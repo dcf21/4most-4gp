@@ -52,9 +52,29 @@ class TestSpectrum(unittest.TestCase):
                                     values=self._values,
                                     value_errors=np.arange(self._size + 1))
 
-    def test_spectrum_retrieval(self):
+    def test_spectrum_retrieval_binary(self):
         unique_filename = str(uuid.uuid4())
-        unique_path = os_path.join("/tmp", unique_filename)
+        unique_path = os_path.join("/tmp", unique_filename+".npy")
+        self._spectrum.to_file(unique_path, binary=True)
+        new_spectrum = self._spectrum.from_file(unique_path, binary=True)
+        os.unlink(unique_path)
+
+        # Check that we got back the same spectrum we put in
+        self.assertEqual(self._spectrum, new_spectrum)
+
+    def test_spectrum_retrieval_text(self):
+        unique_filename = str(uuid.uuid4())
+        unique_path = os_path.join("/tmp", unique_filename+".txt")
+        self._spectrum.to_file(unique_path, binary=False)
+        new_spectrum = self._spectrum.from_file(unique_path, binary=False)
+        os.unlink(unique_path)
+
+        # Check that we got back the same spectrum we put in
+        self.assertEqual(self._spectrum, new_spectrum)
+
+    def test_spectrum_retrieval_unspecified_format(self):
+        unique_filename = str(uuid.uuid4())
+        unique_path = os_path.join("/tmp", unique_filename+".npy")
         self._spectrum.to_file(unique_path)
         new_spectrum = self._spectrum.from_file(unique_path)
         os.unlink(unique_path)
