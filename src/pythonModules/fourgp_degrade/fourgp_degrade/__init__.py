@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-__version__ = "0.1.0"
-
 import logging
 from numpy import RankWarning
 from warnings import simplefilter
 
-from . import spectrum_library_sqlite, spectrum, spectrum_polynomial
+from .convolve import SpectrumConvolver
+from .interpolate import SpectrumInterpolator
+
+__version__ = "0.1.0"
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # TODO: Remove this when stable.

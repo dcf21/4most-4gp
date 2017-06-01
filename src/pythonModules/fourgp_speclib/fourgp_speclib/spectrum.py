@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from os import path as os_path
+from math import sqrt
 import numpy as np
 import hashlib
 import logging
@@ -36,9 +37,9 @@ def requires_common_raster(method):
     """
 
     def wrapper(spectrum, other, *args, **kwargs):
+        assert isinstance(other, Spectrum), "Can only copy mask from another Spectrum object."
         assert spectrum.raster_hash == other.raster_hash, \
             "Cannot do arithmetic on spectra sampled on a different wavelength rasters"
-
         return method(spectrum, other=other, *args, **kwargs)
 
     return wrapper
@@ -221,21 +222,75 @@ class Spectrum(object):
         """
         self.raster_hash = hash_numpy_array(self.wavelengths)
 
+    def copy(self):
+        """
+        Duplicate a spectrum, allocating new memory to hold a new copy of the data within in.
+
+        :return:
+            A new Spectrum object
+        """
+
+        new_wavelengths = self.wavelengths.copy()
+        new_values = self.values.copy()
+        new_value_errors = self.value_errors.copy()
+        output = Spectrum(wavelengths=new_wavelengths, values=new_values, value_errors=new_value_errors)
+
+        if self.mask_set:
+            output.copy_mask_from(self)
+
+        return output
+
+    def apply_redshift(self, z):
+        """
+        Apply a redshift of z to this spectrum, and return a new Spectrum object.
+
+        :param z:
+            The redshift to apply.
+
+        :type z:
+            float
+
+        :return:
+            Spectrum object containing the redshifted spectrum.
+        """
+
+        new_wavelengths = self.wavelengths * (1 + z)
+        new_values = self.values.copy()
+        new_value_errors = self.value_errors.copy()
+        output = Spectrum(wavelengths=new_wavelengths, values=new_values, value_errors=new_value_errors)
+
+        if self.mask_set:
+            output.copy_mask_from(self)
+
+        return output
+
+    def apply_radial_velocity(self, v):
+        # https://ned.ipac.caltech.edu/level5/Hogg/Hogg3.html
+        c = 299792458.0
+        return self.apply_redshift(sqrt((1 + v / c) / (1 - v / c)))
+
+    def remove_redshift(self, z):
+        return self.apply_redshift(-z)
+
+    def correct_radial_velocity(self, v):
+        return self.apply_radial_velocity(-v)
+
     @requires_common_raster
     def copy_mask_from(self, other):
         """
-        Duplicate the wavelength mask set up on another spectrum array, and apply it to this array.
+        Duplicate the wavelength mask set up on another spectrum, and apply it to this one.
         
         :param other:
-            The spectrum array to copy the mask from
+            The spectrum to copy the mask from
             
         :type other:
-            SpectrumArray
+            Spectrum
         
         :return:
             None
         """
         self.mask = other.mask.copy()
+        self.mask_set = other.mask_set
 
     def mask_include(self, wavelength_min=0, wavelength_max=np.inf):
         """
@@ -301,15 +356,13 @@ class Spectrum(object):
         """
 
         new_value_errors = np.hypot(self.value_errors, other.value_errors)
+        new_values = self.values + other.values
 
-        if not (self.mask_set or other.mask_set):
-            new_values = self.values + other.values
-        else:
-            new_values = self.values * self.mask + other.values * other.mask
-            self.mask *= other.mask
-            new_value_errors[~self.mask] = np.inf
-
-        return Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
+        output = Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
+        if self.mask_set or other.mask_set:
+            output.mask = self.mask * other.mask  # Logical AND
+            output.mask_set = True
+        return output
 
     @requires_common_raster
     def __sub__(self, other):
@@ -327,15 +380,13 @@ class Spectrum(object):
         """
 
         new_value_errors = np.hypot(self.value_errors, other.value_errors)
+        new_values = self.values - other.values
 
-        if not (self.mask_set or other.mask_set):
-            new_values = self.values - other.values
-        else:
-            new_values = self.values * self.mask - other.values * other.mask
-            self.mask *= other.mask
-            new_value_errors[~self.mask] = np.inf
-
-        return Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
+        output = Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
+        if self.mask_set or other.mask_set:
+            output.mask = self.mask * other.mask  # Logical AND
+            output.mask_set = True
+        return output
 
     @requires_common_raster
     def __iadd__(self, other):
@@ -353,13 +404,11 @@ class Spectrum(object):
         """
 
         self.value_errors = np.hypot(self.value_errors, other.value_errors)
+        self.values = self.values + other.values
 
-        if not (self.mask_set or other.mask_set):
-            self.values = self.values + other.values
-        else:
-            self.values = self.values * self.mask + other.values * other.mask
-            self.mask *= other.mask
-            self.value_errors[~self.mask] = np.inf
+        if other.mask_set:
+            self.mask *= other.mask  # Logical AND
+            self.mask_set = True
 
         return self
 
@@ -379,13 +428,11 @@ class Spectrum(object):
         """
 
         self.value_errors = np.hypot(self.value_errors, other.value_errors)
+        self.values = self.values - other.values
 
-        if not (self.mask_set or other.mask_set):
-            self.values = self.values - other.values
-        else:
-            self.values = self.values * self.mask - other.values * other.mask
-            self.mask *= other.mask
-            self.value_errors[~self.mask] = np.inf
+        if other.mask_set:
+            self.mask *= other.mask  # Logical AND
+            self.mask_set = True
 
         return self
 
@@ -404,19 +451,15 @@ class Spectrum(object):
             Spectrum object containing the sum of the two spectra.
         """
 
-        if not (self.mask_set or other.mask_set):
-            new_values = self.values * other.values
-        else:
-            new_values = self.values * self.mask * other.values * other.mask
-
+        new_values = self.values * other.values
         new_value_errors = np.hypot(self.value_errors / self.values, other.value_errors / other.values) * \
                            np.abs(new_values)
 
+        output = Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
         if self.mask_set or other.mask_set:
-            self.mask *= other.mask
-            new_value_errors[~self.mask] = np.inf
-
-        return Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
+            output.mask = self.mask * other.mask  # Logical AND
+            output.mask_set = True
+        return output
 
     @requires_common_raster
     def __div__(self, other):
@@ -433,19 +476,15 @@ class Spectrum(object):
             Spectrum object containing the quotient of the two spectra.
         """
 
-        if not (self.mask_set or other.mask_set):
-            new_values = self.values / other.values
-        else:
-            new_values = (self.values * self.mask) / (other.values * other.mask)
-
+        new_values = self.values / other.values
         new_value_errors = np.hypot(self.value_errors / self.values, other.value_errors / other.values) * \
                            np.abs(new_values)
 
+        output = Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
         if self.mask_set or other.mask_set:
-            self.mask *= other.mask
-            new_value_errors[~self.mask] = np.inf
-
-        return Spectrum(wavelengths=self.wavelengths, values=new_values, value_errors=new_value_errors)
+            output.mask = self.mask * other.mask  # Logical AND
+            output.mask_set = True
+        return output
 
     @requires_common_raster
     def __imul__(self, other):
@@ -462,12 +501,15 @@ class Spectrum(object):
             self
         """
 
-        new = self * other
+        new_values = self.values * other.values
+        self.value_errors = np.hypot(self.value_errors / self.values, other.value_errors / other.values) * \
+                            np.abs(new_values)
+        self.values = new_values
 
-        self.values = new.values
-        self.value_errors = new.value_errors
-        self.mask = new.mask
-        self.mask_set = new.mask_set
+        if other.mask_set:
+            self.mask *= other.mask  # Logical AND
+            self.mask_set = True
+
         return self
 
     @requires_common_raster
@@ -485,10 +527,13 @@ class Spectrum(object):
             self
         """
 
-        new = self / other
+        new_values = self.values / other.values
+        self.value_errors = np.hypot(self.value_errors / self.values, other.value_errors / other.values) * \
+                            np.abs(new_values)
+        self.values = new_values
 
-        self.values = new.values
-        self.value_errors = new.value_errors
-        self.mask = new.mask
-        self.mask_set = new.mask_set
+        if other.mask_set:
+            self.mask *= other.mask  # Logical AND
+            self.mask_set = True
+
         return self

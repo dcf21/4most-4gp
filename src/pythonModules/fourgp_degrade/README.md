@@ -1,5 +1,8 @@
-# 4most-4gp
-Galactic pipeline for 4MOST
+# fourgp_degrade
+
+This package provides utility functions for degrading spectra.
+
+For example, it can interpolate spectra on a different wavelength raster, or convolve spectra with some instrumental response function. 
 
 # Contact details
 This code is maintained by:

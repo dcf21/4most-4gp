@@ -12,6 +12,7 @@ if sys.argv[-1] == "publish":
     system("python setup.py sdist upload")
     sys.exit()
 
+
 def read(filename):
     kwds = {"encoding": "utf-8"} if sys.version_info[0] >= 3 else {}
     with open(filename, **kwds) as fp:
@@ -44,7 +45,7 @@ setup(
     ],
     keywords="4MOST Galactic Pipeline",
     packages=find_packages(exclude=["documents", "tests"]),
-    install_requires=["numpy", "scipy", "six", "sharedmem"],
+    install_requires=["numpy", "scipy", "six", "sharedmem", "acor", "emcee"],
     extras_require={
         "test": ["coverage"]
     },

@@ -81,6 +81,83 @@ class SpectrumArray(object):
         """
         return self.values.shape[0]
 
+    @staticmethod
+    def _allocate_memory(wavelengths, item_count, shared_memory):
+
+        # Allocate numpy array to store this SpectrumArray into
+        if not shared_memory:
+
+            # If we're not using shared memory (which the multiprocessing module can share between threads),
+            # we allocate a simple numpy array
+            values = np.empty([item_count, len(wavelengths)])
+            value_errors = np.empty([item_count, len(wavelengths)])
+        else:
+
+            # If we need to shared this array between threads (read only!), then we allocate the memory as a
+            # multiprocessing RawArray
+            wavelengths_shared_base = RawArray(c_double, wavelengths.size)
+            wavelengths_shared = np.frombuffer(wavelengths_shared_base)
+            wavelengths_shared[:] = wavelengths[:]
+            wavelengths = wavelengths_shared
+
+            values_shared_base = RawArray(c_double, wavelengths.size * item_count)
+            values = np.frombuffer(values_shared_base)
+            values = values.reshape([item_count, len(wavelengths)])
+
+            value_errors_shared_base = RawArray(c_double, wavelengths.size * item_count)
+            value_errors = np.frombuffer(value_errors_shared_base)
+            value_errors = value_errors.reshape([item_count, len(wavelengths)])
+
+        return wavelengths, values, value_errors
+
+    @classmethod
+    def from_spectra(cls, spectra, shared_memory=False):
+        """
+        Instantiate new SpectrumArray object, using data in a list of existing Spectrum objects.
+
+        :param spectra:
+            List of Spectrum objects.
+
+        :param shared_memory:
+            Boolean flag indicating whether this SpectrumArray should use multiprocessing shared memory.
+
+        :type shared_memory:
+            bool
+
+        :return:
+            SpectrumArray object
+        """
+
+        assert isinstance(spectra, (list, tuple)), "Argument <spectra> must be a list or tuple of spectra."
+        assert len(spectra) > 0, "Cannot open a SpectrumArray with no members: there is no wavelength raster"
+
+        for spectrum in spectra:
+            assert isinstance(spectrum, Spectrum), "Argument <spectra> must be a list or tuple of spectra. " \
+                                                   "Got object of type <{}>".format(type(spectrum))
+
+        # Inspect first spectrum to work out what wavelength raster we're using
+        raster_hash = spectra[0].raster_hash
+        wavelengths = spectra[0].wavelengths
+
+        # Allocate numpy array to store this SpectrumArray into
+        wavelengths, values, value_errors = SpectrumArray._allocate_memory(wavelengths=wavelengths,
+                                                                           item_count=len(spectra),
+                                                                           shared_memory=shared_memory)
+
+        # Copy spectra into new array one by one
+        for i, item in enumerate(spectra):
+            assert item.raster_hash == raster_hash, \
+                "Item <{}> has a different wavelength raster from preceding spectra in SpectrumArray.".format(i)
+            values[i, :] = item.values
+            value_errors[i, :] = item.value_errors
+
+        # Instantiate a SpectrumArray object
+        return cls(wavelengths=wavelengths,
+                   values=values,
+                   value_errors=value_errors,
+                   metadata_list=[i.metadata for i in spectra],
+                   shared_memory=shared_memory)
+
     @classmethod
     def from_files(cls, filenames, metadata_list, path="", binary=True, shared_memory=False):
         """
@@ -118,9 +195,10 @@ class SpectrumArray(object):
             SpectrumArray object
         """
 
-        # Load first spectrum to work out what wavelength raster we're using
+        assert isinstance(filenames, (list, tuple)), "Argument <filenames> must be a list or tuple of spectra."
         assert len(filenames) > 0, "Cannot open a SpectrumArray with no members: there is no wavelength raster"
 
+        # Load first spectrum to work out what wavelength raster we're using
         if not binary:
             wavelengths, item_values, item_value_errors = np.loadtxt(os_path.join(path, filenames[0])).T
         else:
@@ -128,28 +206,9 @@ class SpectrumArray(object):
         raster_hash = hash_numpy_array(wavelengths)
 
         # Allocate numpy array to store this SpectrumArray into
-        if not shared_memory:
-
-            # If we're not using shared memory (which the multiprocessing module can share between threads),
-            # we allocate a simple numpy array
-            values = np.empty([len(filenames), len(wavelengths)])
-            value_errors = np.empty([len(filenames), len(wavelengths)])
-        else:
-
-            # If we need to shared this array between threads (read only!), then we allocate the memory as a
-            # multiprocessing RawArray
-            wavelengths_shared_base = RawArray(c_double, wavelengths.size)
-            wavelengths_shared = np.frombuffer(wavelengths_shared_base)
-            wavelengths_shared[:] = wavelengths[:]
-            wavelengths = wavelengths_shared
-
-            values_shared_base = RawArray(c_double, wavelengths.size * len(filenames))
-            values = np.frombuffer(values_shared_base)
-            values = values.reshape([len(filenames), len(wavelengths)])
-
-            value_errors_shared_base = RawArray(c_double, wavelengths.size * len(filenames))
-            value_errors = np.frombuffer(value_errors_shared_base)
-            value_errors = value_errors.reshape([len(filenames), len(wavelengths)])
+        wavelengths, values, value_errors = SpectrumArray._allocate_memory(wavelengths=wavelengths,
+                                                                           item_count=len(filenames),
+                                                                           shared_memory=shared_memory)
 
         # Load spectra one by one
         for i, filename in enumerate(filenames):
@@ -165,7 +224,7 @@ class SpectrumArray(object):
                 "Item <{}> has a different wavelength raster from preceding spectra in SpectrumArray.".format(
                     filename)
             values[i, :] = item_values
-            value_errors[i, :] = item_values
+            value_errors[i, :] = item_value_errors
 
         # Instantiate a SpectrumArray object
         return cls(wavelengths=wavelengths,
