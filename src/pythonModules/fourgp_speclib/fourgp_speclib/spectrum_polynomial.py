@@ -23,7 +23,7 @@ class SpectrumPolynomial(Spectrum):
     A class implementing a polynomial spectrum.
     """
 
-    def __init__(self, wavelengths, terms=2, metadata=None):
+    def __init__(self, wavelengths, terms=2, coefficients=None, metadata=None):
         """
         
         :param wavelengths: 
@@ -45,9 +45,21 @@ class SpectrumPolynomial(Spectrum):
         :type metadata:
             dict
         """
-        self.terms = terms
-        self.wavelengths = wavelengths
-        self._coefficients = (0,) * (self._terms + 1)
+
+        assert isinstance(terms, int), \
+            "Number of terms in polynomial spectrum must be an integer."
+
+        assert terms >= 0, \
+            "A polynomial spectrum must have a positive number of terms."
+        self._terms = terms
+
+        assert isinstance(wavelengths, np.ndarray), \
+            "The wavelength raster of a polynomial spectrum should be a numpy ndarray."
+        self._wavelengths = wavelengths
+
+        if coefficients is None:
+            coefficients = (0,) * (self._terms + 1)
+        self.coefficients = coefficients
 
         super(SpectrumPolynomial, self).__init__(wavelengths=wavelengths,
                                                  values=self.values,
@@ -70,6 +82,7 @@ class SpectrumPolynomial(Spectrum):
 
         # Initialise polynomial coefficients to zero
         self.coefficients = (0,) * (self._terms + 1)
+        self._update_values_array()
 
     @property
     def coefficients(self):
@@ -87,6 +100,7 @@ class SpectrumPolynomial(Spectrum):
             "Polynominal spectrum coefficients must all be floats or ints."
 
         self._coefficients = value
+        self._update_values_array()
 
     @property
     def wavelengths(self):

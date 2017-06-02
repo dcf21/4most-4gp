@@ -265,14 +265,55 @@ class Spectrum(object):
         return output
 
     def apply_radial_velocity(self, v):
+        """
+        Apply a radial velocity of v to this spectrum, and return a new Spectrum object. A positive radial velocity
+        means that the object is receding from the observer.
+
+        :param z:
+            The radial velocity to apply.
+
+        :type z:
+            float
+
+        :return:
+            Spectrum object containing the redshifted (receding) spectrum.
+        """
         # https://ned.ipac.caltech.edu/level5/Hogg/Hogg3.html
         c = 299792458.0
-        return self.apply_redshift(sqrt((1 + v / c) / (1 - v / c)))
+        return self.apply_redshift(sqrt((1 + v / c) / (1 - v / c)) - 1)
 
     def remove_redshift(self, z):
+        """
+        Undo a redshift of z from this spectrum, turning an observed (redshifted) spectrum into an object-rest-frame
+        spectrum. The rest frame spectrum is returned as a new Spectrum object.
+
+        :param z:
+            The redshift to undo.
+
+        :type z:
+            float
+
+        :return:
+            Spectrum object containing the object-rest-frame spectrum.
+        """
         return self.apply_redshift(-z)
 
     def correct_radial_velocity(self, v):
+        """
+        Undo a radial velocity of v from this spectrum, turning an observed spectrum of an object receding at velocity v
+        into an object-rest-frame spectrum. The rest frame spectrum is returned as a new Spectrum object. A positive
+        radial velocity means that the object is receding from the observer.
+
+        :param z:
+            The radial velocity to undo.
+
+        :type z:
+            float
+
+        :return:
+            Spectrum object containing the object-rest-frame spectrum.
+        """
+
         return self.apply_radial_velocity(-v)
 
     @requires_common_raster
@@ -339,6 +380,21 @@ class Spectrum(object):
         window = (self.wavelengths >= wavelength_min) * (self.wavelengths <= wavelength_max)
         self.mask[window] = False
         self.mask_set = not np.all(self.mask)
+
+    def truncate_to_mask(self):
+        """
+        Return a new Spectrum object which contains only the data values within the masked region of this spectrum.
+
+        :return:
+            A new Spectrum object
+        """
+
+        new_wavelengths = self.wavelengths[self.mask]
+        new_values = self.values[self.mask]
+        new_value_errors = self.value_errors[self.mask]
+
+        output = Spectrum(wavelengths=new_wavelengths, values=new_values, value_errors=new_value_errors)
+        return output
 
     @requires_common_raster
     def __add__(self, other):

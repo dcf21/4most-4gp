@@ -6,7 +6,7 @@ import numpy as np
 from fourgp_speclib import Spectrum
 
 
-class SpectrumInterpolate(object):
+class SpectrumInterpolator(object):
     """
     A class containing utility functions for interpolating spectra onto different wavelength rasters
     """
