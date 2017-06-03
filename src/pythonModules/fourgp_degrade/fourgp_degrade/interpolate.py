@@ -15,7 +15,7 @@ class SpectrumInterpolator(object):
         assert isinstance(input_spectrum, Spectrum), "The SpectrumInterpolate class can only operate on Spectrum objects."
         self._input = input_spectrum
 
-    def match_to_other_spectrum(self, other, interpolate_errors=True, interpolate_mask = True):
+    def match_to_other_spectrum(self, other, interpolate_errors=True, interpolate_mask=True):
         """
         Resample this spectrum onto the wavelength raster of another Spectrum object.
 
@@ -39,7 +39,7 @@ class SpectrumInterpolator(object):
         if interpolate_errors:
             new_value_errors = np.interp(x=other.wavelengths, xp=self._input.wavelengths, fp=self._input.value_errors)
         else:
-            new_value_errors = self._input.value_errors
+            new_value_errors = np.zeros_like(new_values)
 
         output = Spectrum(wavelengths=other.wavelengths,
                           values=new_values,

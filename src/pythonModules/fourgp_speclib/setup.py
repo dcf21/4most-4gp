@@ -45,7 +45,7 @@ setup(
     ],
     keywords="4MOST Galactic Pipeline",
     packages=find_packages(exclude=["documents", "tests"]),
-    install_requires=["numpy", "scipy", "six", "sharedmem"],
+    install_requires=["numpy", "scipy", "six", "sharedmem", "MySQL-python"],
     extras_require={
         "test": ["coverage"]
     },

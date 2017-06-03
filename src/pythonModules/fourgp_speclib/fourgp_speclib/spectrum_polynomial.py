@@ -53,13 +53,13 @@ class SpectrumPolynomial(Spectrum):
             "A polynomial spectrum must have a positive number of terms."
         self._terms = terms
 
-        assert isinstance(wavelengths, np.ndarray), \
-            "The wavelength raster of a polynomial spectrum should be a numpy ndarray."
-        self._wavelengths = wavelengths
-
         if coefficients is None:
             coefficients = (0,) * (self._terms + 1)
-        self.coefficients = coefficients
+        self._coefficients = coefficients
+
+        assert isinstance(wavelengths, np.ndarray), \
+            "The wavelength raster of a polynomial spectrum should be a numpy ndarray."
+        self.wavelengths = wavelengths
 
         super(SpectrumPolynomial, self).__init__(wavelengths=wavelengths,
                                                  values=self.values,
@@ -195,10 +195,12 @@ class SpectrumPolynomial(Spectrum):
         """
 
         assert isinstance(other, Spectrum), \
-            "The fit_to method requires a Spectrum object to fit a polynomial to."
+            "The fit_to method requires a Spectrum object to fit a polynomial to. Supplied object has type {}.". \
+                format(type(other))
 
         assert isinstance(template, Spectrum), \
-            "The fit_to method requires a Spectrum object to fit a polynomial to."
+            "The fit_to method requires a Spectrum object to fit a polynomial to. Supplied object has type {}.". \
+                format(type(other))
 
         assert other.raster_hash == template.raster_hash, \
             "The two spectra passed to the fit_to_continuum() method must be sampled on the same raster."
@@ -209,15 +211,32 @@ class SpectrumPolynomial(Spectrum):
         if lambda_max_norm is None:
             lambda_max_norm = other.wavelengths[-1]
 
-        error_func = lambda coefficients, other_, template_: \
-            (other_.values - template_.values * self._evaluate_polynomial(other_.wavelengths, coefficients)) / \
-            other_.value_errors
+        # Exclude any wavelengths that are masked out or not finite
+        mask = (other.mask * template.mask *
+                (other.value_errors > 0) * np.isfinite(other.values) * np.isfinite(template.values))
+
+        other_values_masked = other.values[mask]
+        other_value_errors_masked = other.value_errors[mask]
+        other_wavelengths_masked = other.wavelengths[mask]
+        template_values_masked = template.values[mask]
+
+        assert len(other) > 0, "No good data in spectrum <other>."
+        assert len(template) > 0, "No good data in spectrum <template>."
+
+        def error_func(coefficients, other_wavelengths_masked_, other_values_masked_,
+                       other_value_errors_masked_, template_values_masked_):
+            return ((other_values_masked_ -
+                     template_values_masked_ * self._evaluate_polynomial(other_wavelengths_masked_, coefficients)) /
+                    other_value_errors_masked_)
 
         # roughly fit the template to the observed spectrum
         norm_factor = np.median(
             other.values[(other.wavelengths > lambda_min_norm) & (other.wavelengths < lambda_max_norm)])
-        coefficients_initial = np.asarray([norm_factor] + [0] * self._terms)
+        coefficients_initial = np.asarray((norm_factor,) + (0,) * self._terms)
 
-        result = least_squares(error_func, coefficients_initial, args=(other, template))
+        result = least_squares(error_func, coefficients_initial, args=(other_wavelengths_masked,
+                                                                       other_values_masked,
+                                                                       other_value_errors_masked,
+                                                                       template_values_masked))
 
         self.coefficients = tuple(result.x)

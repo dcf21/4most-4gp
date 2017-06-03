@@ -285,6 +285,7 @@ class SpectrumArray(object):
 
         # Check that requested index is within range
         assert 0 <= index < len(self), "Index of SpectrumArray out of range."
+        index = int(index)
 
         return Spectrum(wavelengths=self.wavelengths,
                         values=self.values[index, :],

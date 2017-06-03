@@ -107,7 +107,7 @@ class Spectrum(object):
         self.wavelengths = wavelengths
         self.values = values
         self.value_errors = value_errors
-        self.mask = np.ones_like(self.wavelengths)
+        self.mask = np.ones_like(self.wavelengths, dtype=np.bool)
         self.mask_set = False
         self.metadata = metadata
 

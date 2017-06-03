@@ -8,7 +8,6 @@ import logging
 import itertools
 import emcee
 from emcee.interruptible_pool import InterruptiblePool
-from . import emcee_helpers
 
 import fourgp_speclib
 import fourgp_degrade
@@ -128,22 +127,19 @@ class RvInstance(object):
     def pick_template_spectrum(template_library, grid_axes, axis_values):
         template_number = 0
         for axis in grid_axes:
-            axis_length = round((axis[2] - axis[1]) / axis[3])
+            axis_length = int(round((axis[2] - axis[1]) / axis[3]))
             template_number *= axis_length
             template_number += int(round(axis_values[axis[0]] - axis[1]) / axis[3])
-        return template_library.extract_item[template_number]
+        return template_library.extract_item(template_number)
 
     # This method has to be static because class instances cannot be passed between threads if using a multiprocessing
     # pool of workers
     @staticmethod
-    def log_probability(theta, def_param):
+    def log_probability(theta, template_library, observed_spectrum, grid_axes):
 
         # Unpack stellar parameters from vector passed by optimiser
         # This must match self.mcmc_parameter_order above
         velocity, t_eff, fe_h, log_g, sigma_gauss, c0, c1, c2 = theta
-
-        # Unpack additional parameters
-        template_library, observed_spectrum, grid_axes = def_param
 
         # Return a probability of minus infinity if we are outside bounds of valid parameter space
         if (np.abs(velocity) > 500) or (sigma_gauss < 1) or (sigma_gauss > 1.3):
@@ -161,7 +157,7 @@ class RvInstance(object):
                                                               grid_axes=grid_axes,
                                                               axis_values={"Teff": t_eff, "Fe/H": fe_h, "log_g": log_g})
 
-        if any(np.isnan(template_spectrum)):
+        if any(np.isnan(template_spectrum.values)):
             return -np.inf
 
         # Convolve the template spectrum with a Gaussian
@@ -182,10 +178,14 @@ class RvInstance(object):
                                                                coefficients=(c0, c1, c2))
         template_with_continuum = template_continuum * template_resampled
 
+        # Mask out bad data
+        mask = (observed_spectrum.mask * np.isfinite(observed_spectrum.values) * (observed_spectrum.value_errors > 0) *
+                np.isfinite(template_with_continuum.values))
+
         # log likelihood
-        log_likelihood = np.sum(norm.logpdf(x=observed_spectrum.values,
-                                            loc=template_with_continuum,
-                                            scale=observed_spectrum.value_errors))
+        log_likelihood = np.sum(norm.logpdf(x=observed_spectrum.values[mask],
+                                            loc=template_with_continuum.values[mask],
+                                            scale=observed_spectrum.value_errors[mask]))
         log_likelihood += norm.logpdf(x=sigma_gauss, loc=1.15, scale=0.02)
         log_likelihood += norm.logpdf(x=velocity, loc=0, scale=150)
 
@@ -212,16 +212,24 @@ class RvInstance(object):
         observed_truncated = observed_spectrum.truncate_to_mask()
 
         # Make spectrum shared so that it can be passed among threads in a worker pool
-        observed_shared = fourgp_speclib.SpectrumArray.from_spectra(spectra=[observed_truncated], shared_memory=True)
+        observed_shared = fourgp_speclib.SpectrumArray.from_spectra(spectra=[observed_truncated], shared_memory=True). \
+            extract_item(0)
 
         # Make initial continuum fit to observed spectrum, using small wavelength window at 5650 to 5820 A
         observed_continuum_fit = fourgp_speclib.SpectrumPolynomial(wavelengths=observed_shared.wavelengths,
                                                                    terms=2)
+
+        # Pick a template continuum normalised spectrum
+        template_continuum_normalised = RvInstance.pick_template_spectrum(template_library=self._template_spectra,
+                                                                          grid_axes=self.grid_axes,
+                                                                          axis_values=stellar_labels)
+        interpolator = fourgp_degrade.SpectrumInterpolator(template_continuum_normalised)
+        template_interpolated = interpolator.match_to_other_spectrum(observed_shared)
+
+        # Fit continuum to observed spectrum, assuming its absorption features matched by template at zero rv
         observed_continuum_fit.fit_to_continuum(
             other=observed_shared,
-            template=RvInstance.pick_template_spectrum(template_library=self._template_spectra,
-                                                       grid_axes=self.grid_axes,
-                                                       axis_values=stellar_labels),
+            template=template_interpolated,
             lambda_min_norm=5650, lambda_max_norm=5820)
 
         # Add coefficients of initial continuum fit to dictionary of stellar parameters
@@ -232,7 +240,7 @@ class RvInstance(object):
         # Parameter for MCMC
         n_dim = 8  # Number of parameters in the model
         n_walkers = 160  # Number of MCMC walkers
-        n_burn = 1000   # Length of the "burn-in" period to let chains stabilize
+        n_burn = 1000  # Length of the "burn-in" period to let chains stabilize
         n_steps = 1300
 
         # Initialise starting points for MCMC walkers
@@ -245,26 +253,34 @@ class RvInstance(object):
         walker_positions = np.clip(a=walker_positions,
                                    a_min=[self.grid_axes_min[x] for x in self.mcmc_parameter_order],
                                    a_max=[self.grid_axes_max[x] for x in self.mcmc_parameter_order])
+        # print [RvInstance.log_probability(walker_positions[i], self._template_spectra, observed_shared, self.grid_axes) for i in range(n_walkers)]
 
         # Start workers
         pool = InterruptiblePool(processes=self._threads)
 
         # initialize the sampler
-        sampler = emcee.EnsembleSampler(n_walkers, n_dim, RvInstance.log_probability, pool=pool)
+        sampler = emcee.EnsembleSampler(nwalkers=n_walkers, dim=n_dim, lnpostfn=RvInstance.log_probability,
+                                        # pool=pool,
+                                        kwargs={"template_library": self._template_spectra,
+                                                "observed_spectrum": observed_shared,
+                                                "grid_axes": self.grid_axes})
 
         # burn-in the chains
-        emcee_helpers.run_mcmc(sampler, walker_positions, n_burn)
+        sampler.run_mcmc(pos0=walker_positions, N=n_burn)
 
-        med = np.median(sampler._lnprob[:, -1])
-        rms = 0.741*(np.percentile(sampler._lnprob[:, -1], 75) - np.percentile(sampler._lnprob[:, -1], 25))
+        med = np.median(a=sampler.lnprobability[:, -1])
+        rms = 0.741 * (np.percentile(a=sampler.lnprobability[:, -1], q=75) -
+                       np.percentile(a=sampler.lnprobability[:, -1], q=25))
 
         # Determine the starting point after burn-in. Eliminate bad chains
-        good_chains = sampler._lnprob[:, -1] > (med - 3*rms)
+        good_chains = sampler.lnprobability[:, -1] > (med - 3 * rms)
 
-        median_params = np.median(sampler.chain[good_chains, -1, :], axis=0)
-        rms_params = 0.741*(np.percentile(sampler.chain[good_chains, -1, :], 75, axis=0) -
-                            np.percentile(sampler.chain[good_chains, -1, :], 25, axis=0))
-        best = np.random.normal(median_params, rms_params, (n_walkers, n_dim))
+        median_params = np.median(a=sampler.chain[good_chains, -1, :], axis=0)
+        rms_params = 0.741 * (np.percentile(a=sampler.chain[good_chains, -1, :], q=75, axis=0) -
+                              np.percentile(a=sampler.chain[good_chains, -1, :], q=25, axis=0))
+        best = np.random.normal(loc=median_params,
+                                scale=rms_params,
+                                size=(n_walkers, n_dim))
 
         # clip the guesses to appropriate ranges
         best = np.clip(a=best,
@@ -275,9 +291,8 @@ class RvInstance(object):
         sampler.reset()
 
         # Run the chains for real
-        emcee_helpers.run_mcmc(sampler, best, n_steps)
+        sampler.run_mcmc(pos0=best, N=n_steps)
         pool.terminate()
-        sampler = emcee_helpers.SamplerData(sampler, theta0)
 
         max_prob = sampler.flatchain[np.argmax(sampler.flatlnprobability)]
         output = {}
