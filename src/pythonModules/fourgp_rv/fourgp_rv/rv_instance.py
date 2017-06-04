@@ -125,17 +125,61 @@ class RvInstance(object):
     # pool of workers
     @staticmethod
     def pick_template_spectrum(template_library, grid_axes, axis_values):
+        """
+        Pick a template spectrum from a SpectrumArray which most closely matches the stellar parameters in the
+        dictionary axis_values.
+
+        :param template_library:
+            A SpectrumArray object containing a library of template spectra. The grid of stellar parameters sampled
+            should be specified by grid_axes.
+
+        :param grid_axes:
+            A list of the stellar parameters which are varied in template_library. Each axis of the grid is specified
+            as [name, min, max, step size]. Stellar parameters are varied linearly. The final axis on the list varies
+            the mostly rapidly with index in the SpectrumArray.
+
+        :param axis_values:
+            A dictionary of stellar parameters to which we should match a template spectrum.
+
+        :return:
+            A Spectrum object.
+        """
         template_number = 0
         for axis in grid_axes:
+            # How many samples do we have along this axis?
             axis_length = int(round((axis[2] - axis[1]) / axis[3]))
             template_number *= axis_length
-            template_number += int(round(axis_values[axis[0]] - axis[1]) / axis[3])
+            # Find the spectrum which most closely matches the requested value of this stellar parameter.
+            axis_position = int(round(axis_values[axis[0]] - axis[1]) / axis[3])
+            # Clip to the limits of ths axis
+            axis_position = min(max(axis_position, 0), axis_length-1)
+            # Multiply-and-accumulate the index of the spectrum we want
+            template_number += axis_position
         return template_library.extract_item(template_number)
 
     # This method has to be static because class instances cannot be passed between threads if using a multiprocessing
     # pool of workers
     @staticmethod
     def log_probability(theta, template_library, observed_spectrum, grid_axes):
+        """
+        This is the log-probability function which we use an MCMC chain to sample.
+
+        :param theta:
+            A vector containing floating point values for: [velocity, t_eff, fe_h, log_g, sigma_gauss, c0, c1, c2]
+
+        :param template_library:
+            A SpectrumArray object containing a grid of template continuum-normalised spectra at various stellar
+            parameter values.
+
+        :param observed_spectrum:
+            A Spectrum object containing the observing spectrum whose radial velocity we're trying to estimate.
+
+        :param grid_axes:
+            A list of the stellar-parameter axes sampled by template_library.
+
+        :return:
+            A floating-point log-probability value.
+        """
 
         # Unpack stellar parameters from vector passed by optimiser
         # This must match self.mcmc_parameter_order above
@@ -148,8 +192,8 @@ class RvInstance(object):
         # Check that stellar parameters are within the range of values spanned by template spectra
         for axis_no, axis_value in enumerate([t_eff, fe_h, log_g]):
             axis = grid_axes[axis_no]
-            if ((axis_value < axis[1] - axis[3] / 2) or
-                    (axis_value > axis[2] + axis[3] / 2)):
+            if ((axis_value <= axis[1] - axis[3] / 2) or
+                    (axis_value >= axis[2] + axis[3] / 2)):
                 return -np.inf
 
         # Pick a template
@@ -192,6 +236,19 @@ class RvInstance(object):
         return log_likelihood - 100000
 
     def fit_rv(self, observed_spectrum, initial_guesses=None):
+        """
+        Estimate the radial velocity of the observed specrtrum <observed_spectrum>.
+
+        :param observed_spectrum:
+            A Spectrum object containing the observed spectrum we are to fit.
+
+        :param initial_guesses:
+            An optional dictionary of initial guesses for the stellar parameters of this spectrum. If it is not
+            supplied, default values are assumed.
+
+        :return:
+            A dictionary of stellar parameters, including a radial velocity with key "velocity" (units km/s).
+        """
 
         # Initial guesses for stellar parameters
         stellar_labels = self.grid_axes_initial_guesses.copy()
