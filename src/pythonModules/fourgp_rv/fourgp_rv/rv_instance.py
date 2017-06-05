@@ -183,6 +183,7 @@ class RvInstance(object):
 
         # Unpack stellar parameters from vector passed by optimiser
         # This must match self.mcmc_parameter_order above
+        # velocity has units of km/s
         velocity, t_eff, fe_h, log_g, sigma_gauss, c0, c1, c2 = theta
 
         # Return a probability of minus infinity if we are outside bounds of valid parameter space
@@ -209,7 +210,7 @@ class RvInstance(object):
         template_convolved = convolver.gaussian_convolve(sigma_gauss)
 
         # Shift in wavelength
-        template_observer_frame = template_convolved.apply_radial_velocity(velocity * 1000)
+        template_observer_frame = template_convolved.apply_radial_velocity(velocity * 1000)  # Unit m/s
 
         # Interpolate the convolved, Doppler-shifted template onto the observed spectrum's wavelength
         interpolator = fourgp_degrade.SpectrumInterpolator(template_observer_frame)

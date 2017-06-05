@@ -270,13 +270,13 @@ class Spectrum(object):
         means that the object is receding from the observer.
 
         :param z:
-            The radial velocity to apply.
+            The radial velocity to apply (units m/s)
 
         :type z:
             float
 
         :return:
-            Spectrum object containing the redshifted (receding) spectrum.
+            Spectrum object containing the redshifted (receding) spectrum
         """
         # https://ned.ipac.caltech.edu/level5/Hogg/Hogg3.html
         c = 299792458.0
@@ -294,7 +294,7 @@ class Spectrum(object):
             float
 
         :return:
-            Spectrum object containing the object-rest-frame spectrum.
+            Spectrum object containing the object-rest-frame spectrum
         """
         return self.apply_redshift(-z)
 
@@ -305,13 +305,13 @@ class Spectrum(object):
         radial velocity means that the object is receding from the observer.
 
         :param z:
-            The radial velocity to undo.
+            The radial velocity to undo (units m/s)
 
         :type z:
             float
 
         :return:
-            Spectrum object containing the object-rest-frame spectrum.
+            Spectrum object containing the object-rest-frame spectrum
         """
 
         return self.apply_radial_velocity(-v)
