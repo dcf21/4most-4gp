@@ -103,6 +103,12 @@ class RvInstance(object):
         # Load library of template spectra
         self._template_spectra = self._spectrum_library.open(ids=grid_spectrum_ids, shared_memory=True)
 
+        # Default parameters for MCMC
+        self.n_dim = 8  # Number of parameters in the model
+        self.n_walkers = 160  # Number of MCMC walkers
+        self.n_burn = 1000  # Length of the "burn-in" period to let chains stabilize
+        self.n_steps = 1300
+
     @classmethod
     def from_spectrum_library_sqlite(cls, library_path, *args, **kwargs):
         """
@@ -295,36 +301,30 @@ class RvInstance(object):
         stellar_labels["c1"] = observed_continuum_fit.coefficients[1]
         stellar_labels["c2"] = observed_continuum_fit.coefficients[2]
 
-        # Parameter for MCMC
-        n_dim = 8  # Number of parameters in the model
-        n_walkers = 160  # Number of MCMC walkers
-        n_burn = 1000  # Length of the "burn-in" period to let chains stabilize
-        n_steps = 1300
-
         # Initialise starting points for MCMC walkers
         theta0 = [stellar_labels[x] for x in self.mcmc_parameter_order]
         walker_positions = np.random.normal(loc=theta0,
                                             scale=[self.grid_axes_step_sizes[x] for x in self.mcmc_parameter_order],
-                                            size=(n_walkers, n_dim))
+                                            size=(self.n_walkers, self.n_dim))
 
         # Clip the positions of the walkers to appropriate ranges
         walker_positions = np.clip(a=walker_positions,
                                    a_min=[self.grid_axes_min[x] for x in self.mcmc_parameter_order],
                                    a_max=[self.grid_axes_max[x] for x in self.mcmc_parameter_order])
-        # print [RvInstance.log_probability(walker_positions[i], self._template_spectra, observed_shared, self.grid_axes) for i in range(n_walkers)]
+        # print [RvInstance.log_probability(walker_positions[i], self._template_spectra, observed_shared, self.grid_axes) for i in range(self.n_walkers)]
 
         # Start workers
         pool = InterruptiblePool(processes=self._threads)
 
         # initialize the sampler
-        sampler = emcee.EnsembleSampler(nwalkers=n_walkers, dim=n_dim, lnpostfn=RvInstance.log_probability,
+        sampler = emcee.EnsembleSampler(nwalkers=self.n_walkers, dim=self.n_dim, lnpostfn=RvInstance.log_probability,
                                         # pool=pool,
                                         kwargs={"template_library": self._template_spectra,
                                                 "observed_spectrum": observed_shared,
                                                 "grid_axes": self.grid_axes})
 
         # burn-in the chains
-        sampler.run_mcmc(pos0=walker_positions, N=n_burn)
+        sampler.run_mcmc(pos0=walker_positions, N=self.n_burn)
 
         med = np.median(a=sampler.lnprobability[:, -1])
         rms = 0.741 * (np.percentile(a=sampler.lnprobability[:, -1], q=75) -
@@ -338,7 +338,7 @@ class RvInstance(object):
                               np.percentile(a=sampler.chain[good_chains, -1, :], q=25, axis=0))
         best = np.random.normal(loc=median_params,
                                 scale=rms_params,
-                                size=(n_walkers, n_dim))
+                                size=(self.n_walkers, self.n_dim))
 
         # clip the guesses to appropriate ranges
         best = np.clip(a=best,
@@ -349,7 +349,7 @@ class RvInstance(object):
         sampler.reset()
 
         # Run the chains for real
-        sampler.run_mcmc(pos0=best, N=n_steps)
+        sampler.run_mcmc(pos0=best, N=self.n_steps)
         pool.terminate()
 
         max_prob = sampler.flatchain[np.argmax(sampler.flatlnprobability)]
