@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-__version__ = "0.1.0"
+"""
+This python module defines a wrapper for synthesising spectra using TurboSpectrum.
+"""
 
 import logging
 from numpy import RankWarning
@@ -9,8 +11,10 @@ from warnings import simplefilter
 
 from . import turbospectrum
 
+__version__ = "0.1.0"
+
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # TODO: Remove this when stable.
+logger.setLevel(logging.INFO)  # TODO: Remove this when stable.
 
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter(
