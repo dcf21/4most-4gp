@@ -9,7 +9,7 @@ import logging
 from numpy import RankWarning
 from warnings import simplefilter
 
-from . import turbospectrum
+from . import turbospectrum, solar_abundances
 
 __version__ = "0.1.0"
 

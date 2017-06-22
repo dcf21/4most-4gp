@@ -17,71 +17,116 @@ logger = logging.getLogger(__name__)
 
 
 class TurboSpectrum:
-    our_path = "/home/dcf21/iwg7_pipeline"
-    id_string = "turbospec_%d" % os.getpid()
-    tmp_dir = os_path.join("/tmp", id_string)
+    def __init__(self, turbospec_path, interpol_path, line_list_paths, marcs_grid_path):
+        """
 
-    turbo_path = os_path.join(our_path, 'turboSpec/EXPORT-15.1/exec-gf-v15.1')
-    interp_path = os_path.join(our_path, 'marcs/interpol_marcs')
-    solar_abundance_file = '/Users/khawkins/Desktop/BACCHUS/solarabu.dat'
+        :param turbospec_path:
+            Path where the turbospectrum binaries 'babsma' and 'bsyn' can be found.
 
-    def __init__(self, lambda_min=5100, lambda_max=5200, lambda_delta=0.05, metallicity=-1.5,
-                 marcs_model_name='5777g4.44m0.0z-1.50.int',
-                 turbulent_velocity=1.0, continuum_opacity_dir=None, free_abund=None,
-                 sphere="F", mod_path=None, spec_path=None, spec_file='test1.spec',
-                 alpha=None, s_process=0, r_process=0,
-                 star_name=None,
-                 line_list_dir=None,
-                 line_list_files=None,
-                 verbose=True):
+        :type turbospec_path:
+            str
 
-        if mod_path is None:
-            mod_path = self.tmp_dir
-        if spec_path is None:
-            spec_path = self.spec_path
-        if continuum_opacity_dir is None:
-            continuum_opacity_dir = self.tmp_dir
+        :param interpol_path:
+            Path where the compiled interpol_modeles.f binary can be found.
 
+        :type interpol_path:
+            str
+
+        :param line_list_paths:
+            Path(s) where line lists for synthetic spectra can be found. Specify as either a string, or a list of
+            strings.
+
+        :type line_list_paths:
+            list or str
+
+        :param marcs_grid_path:
+            Path where a grid of MARCS .mod files can be found. These contain the model atmospheres we use.
+
+        :type marcs_grid_path:
+            str
+        """
+
+        if not isinstance(line_list_paths, (list, tuple)):
+            line_list_paths = [line_list_paths]
+
+        self.turbospec_path = turbospec_path
+        self.interpol_path = interpol_path
+        self.line_list_paths = line_list_paths
+        self.marcs_grid_path = marcs_grid_path
+
+        # Default spectrum parameters
+        self.lambda_min = 5100
+        self.lambda_max = 5200
+        self.lambda_delta = 0.05
+        self.metallicity = -1.5
+        self.turbulent_velocity = 1.0
+        self.free_abundances = None
+        self.sphere = None
+        self.alpha = None
+        self.s_process = 0
+        self.r_process = 0
+        self.star_name = "anonymous_star"
+        self.verbose = True
+        self.line_list_files = None
+        self.spec_file = "test1.spec"
+
+        # Create temporary directory
+        self.id_string = "turbospec_%d" % os.getpid()
+        self.tmp_dir = os_path.join("/tmp", self.id_string)
         os.system("mkdir -p %s" % self.tmp_dir)
 
-        if line_list_dir is None:
-            line_list_dir = os_path.join(self.our_path, "linelists")
-        if line_list_files is None:
-            line_list_files = glob.glob(os_path.join(line_list_dir, "*.list"))
 
-        self.lambda_min = lambda_min
-        self.lambda_max = lambda_max
-        self.star_name = star_name
-        self.lambda_delta = lambda_delta
-        self.metallicity = metallicity
-        self.marcs_model_name = marcs_model_name
-        self.turbulent_velocity = turbulent_velocity
-        self.continuum_opacity_dir = continuum_opacity_dir  # This is where babsma dumps continuum opacity files
-        self.free_abundances = free_abund
-        self.sphere = sphere
-        self.mod_path = mod_path  # This is where we put interpolated model atmospheres
-        self.spec_path = spec_path
-        self.spec_file = spec_file
-        self.alpha = alpha
-        self.s_process = s_process
-        self.r_process = r_process
-        self.line_list_dir = line_list_dir
-        self.line_list_files = line_list_files
-        self.verbose = verbose
+def set_config(self, lambda_min=None, lambda_max=None, lambda_delta=None, metallicity=None,
+                 turbulent_velocity=None, free_abund=None,
+                 sphere=None, spec_file=None, alpha=None, s_process=None, r_process=None, star_name=None,
+                 line_list_paths=None, line_list_files=None,
+                 verbose=True):
+
+        if lambda_min is not None:
+            self.lambda_min = lambda_min
+        if lambda_max is not None:
+            self.lambda_max = lambda_max
+        if lambda_delta is not None:
+            self.lambda_delta = lambda_delta
+        if metallicity is not None:
+            self.metallicity = metallicity
+        if star_name is not None:
+            self.star_name = star_name
+        if turbulent_velocity is not None:
+            self.turbulent_velocity = turbulent_velocity
+        if free_abund is not None:
+            self.free_abundances = free_abund
+        if sphere is not None:
+            self.sphere = sphere
+        if spec_file is not None:
+            self.spec_file = spec_file
+        if alpha is not None:
+            self.alpha = alpha
+        if s_process is not None:
+            self.s_process = s_process
+        if r_process is not None:
+            self.r_process = r_process
+        if line_list_paths is not None:
+            if not isinstance(line_list_paths, (list, tuple)):
+                line_list_paths = [line_list_paths]
+            self.line_list_paths = line_list_paths
+        if line_list_files is not None:
+            self.line_list_files = line_list_files
+        if verbose is not None:
+            self.verbose = verbose
 
         # ------ assume an alpha enhancment ----
         if self.alpha is None:
             if self.metallicity < -1.0:
                 self.alpha = 0.4
-            elif self.metallicity > -1.0 and self.metallicity < 0.0:
+            elif -1.0 < self.metallicity < 0.0:
                 self.alpha = -0.4 * self.metallicity
             else:
                 self.alpha = 0
 
     def generate_model_atmosphere(self, t_eff, g, f):
-        '''
-        PRUPOSE:
-        Generates an interpolated model atmopshere from the MARCs grid using the interpol.f routine developed by
+        """
+        Generates an interpolated model atmosphere from the MARCs grid using the interpol.f routine developed by
         T. Masseron (Masseron, PhD Thesis, 2006). This is a python wrapper for that fortran code.
 
         INPUT :
@@ -93,10 +138,9 @@ class TurboSpectrum:
         OPTIONAL:
         modpath = the path to write the model atmosphere
 
-        '''
+        """
 
         if self.verbose:
-            # stdout= None
             stdout = open('/dev/null', 'w')
             stderr = subprocess.STDOUT
         else:
