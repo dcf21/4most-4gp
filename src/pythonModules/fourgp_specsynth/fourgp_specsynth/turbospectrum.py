@@ -13,7 +13,7 @@ import re
 import glob
 import logging
 
-from solar_abundances import solar_abundances
+from solar_abundances import solar_abundances, periodic_table
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +270,7 @@ class TurboSpectrum:
 
             try:
                 p = subprocess.Popen(
-                    [self.interp_path + 'interpol_planparallel_in.com', str(t_eff), str(g), str(f), output],
+                    [self.interpol_path + 'interpol_planparallel_in.com', str(t_eff), str(g), str(f), output],
                     stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
                 stdout, stderr = p.communicate()
             except subprocess.CalledProcessError:
@@ -287,7 +287,7 @@ class TurboSpectrum:
 
             try:
                 p = subprocess.Popen(
-                    [self.interp_path + 'interpol_spherical_in.com', str(t_eff), str(g), str(f), output],
+                    [self.interpol_path + 'interpol_spherical_in.com', str(t_eff), str(g), str(f), output],
                     stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
                 stdout, stderr = p.communicate()
             except subprocess.CalledProcessError:
@@ -306,10 +306,10 @@ class TurboSpectrum:
         '''
 
         # Checks that model metallicity and input metallicity are consistent
-        modelmetal = float(self.marcs_model_name.split('z')[1].split('.int')[0])
-        if (modelmetal > self.metallicity + 0.05) or (modelmetal < self.metallicity - 0.05):
+        model_metallicity = float(self.marcs_model_name.split('z')[1].split('.int')[0])
+        if (model_metallicity > self.metallicity + 0.05) or (model_metallicity < self.metallicity - 0.05):
             logger.warn("Atmosphere model ({:.2f}) and input metallicity ({:.2f}) not consistent; proceed with caution".
-                        format(modelmetal, self.metallicity))
+                        format(model_metallicity, self.metallicity))
 
         # Allow for user input abundances as a dictionary of the form {element: abundance}
         if self.free_abundances is None:
@@ -321,8 +321,9 @@ class TurboSpectrum:
                 assert element in solar_abundances, "Cannot proceed as solar abundance for element <{}> is unknown". \
                     format(element)
 
-                individual_abundances += "%i  {:.2f}\n" % (
-                    int(z[elind]), float(solar_abundances[element]) + float(abundance))
+                atomic_number = periodic_table.index(element)
+                individual_abundances += "{:d}  {:.2f}\n".format(int(atomic_number),
+                                                                 float(solar_abundances[element]) + float(abundance))
 
         # Make a list of line-list files
         line_lists = "'NFILES   :' '{:d}'\n".format(len(self.line_list_files))
