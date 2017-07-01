@@ -12,6 +12,7 @@ from os import path as os_path
 import re
 import glob
 import logging
+from operator import itemgetter
 
 from solar_abundances import solar_abundances, periodic_table
 
@@ -85,6 +86,7 @@ class TurboSpectrum:
 
         # Look up what MARCS models we have
         self.counter_marcs = 0
+        self.marcs_model_name = "default"
         self.counter_spectra = 0
         self.marcs_values = None
         self.marcs_value_keys = []
@@ -115,7 +117,7 @@ class TurboSpectrum:
         self.marcs_value_keys.sort()
         self.marcs_models = {}
 
-        marcs_models = glob.glob(os_path.join(self.marcs_grid_path,"*"))
+        marcs_models = glob.glob(os_path.join(self.marcs_grid_path, "*"))
         for item in marcs_models:
 
             # Extract model parameters from .mod filename
@@ -242,20 +244,13 @@ class TurboSpectrum:
         if verbose is not None:
             self.verbose = verbose
 
-    def _generate_model_atmosphere(self, t_eff, g, f):
+    def _generate_model_atmosphere(self):
         """
         Generates an interpolated model atmosphere from the MARCS grid using the interpol.f routine developed by
         T. Masseron (Masseron, PhD Thesis, 2006). This is a python wrapper for that fortran code.
-
-        :param t_eff:
-            Effective temperature of requested model atmosphere.
-        :param g:
-            Log(g) of requested model atmosphere.
-        :param f:
-            [Fe/H] metallicity of requested model atmosphere.
-
         """
         self.counter_marcs += 1
+        self.marcs_model_name = "marcs_{:08d}".format(self.counter_marcs)
 
         if self.verbose:
             stdout = subprocess.STDOUT
@@ -264,34 +259,122 @@ class TurboSpectrum:
             stdout = open('/dev/null', 'w')
             stderr = subprocess.STDOUT
 
-        # ----- defines the point at which Plane-Parallel vs spherical model atmosphere models are used
-        if g >= 3.0:
-            self.marcs_model_name = '%d_%ig%.2fm0.0z%.2f.int' % (self.counter_marcs, t_eff, g, f)
+        # Defines default point at which plane-parallel vs spherical model atmosphere models are used
+        spherical = self.sphere
+        if spherical is None:
+            spherical = (self.log_g < 3)
 
-            output = os_path.join(self.tmp_dir, self.marcs_model_name)
+        # Default MARCS model settings
+        marcs_parameters = {"spherical": spherical,
+                            "mass": 0,
+                            "turbulence": 0,
+                            "model_type": "st",
+                            "a": 0, "c": 0, "n": 0, "o": 0, "r": 0, "s": 0}
 
-            try:
-                p = subprocess.Popen(
-                    [self.interpol_path + 'interpol_planparallel_in.com', str(t_eff), str(g), str(f), output],
-                    stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
-                stdout, stderr = p.communicate()
-            except subprocess.CalledProcessError:
-                raise RuntimeError('Plane-Parallel Model atmosphere interpolation failed ....')
-            self.sphere = 'F'
+        # Pick MARCS settings which bracket requested stellar parameters
+        interpolate_parameters = ("metallicity", "log_g", "temperature")
 
-        else:
-            self.marcs_model_name = '%d_%ig%.2fm1.0z%.2f.int' % (self.counter_marcs, t_eff, g, f)
+        interpolate_parameters_around = {"temperature": self.t_eff,
+                                         "log_g": self.log_g,
+                                         "metallicity": self.metallicity
+                                         }
 
-            output = os_path.join(self.tmp_dir, self.marcs_model_name)
+        for key in interpolate_parameters:
+            value = interpolate_parameters_around[key]
+            options = self.marcs_values[key]
+            if (value < options[0]) or (value > options[-1]):
+                raise ValueError("Value of parameter <{}> needs to be in range {} to {}. You requested {}.".
+                                 format(key, options[0], options[-1], value))
+            for index in range(len(options)):
+                if value <= options[index]:
+                    break
+            marcs_parameters[key] = [options[index], options[index + 1], index, index+1]
 
-            try:
-                p = subprocess.Popen(
-                    [self.interpol_path + 'interpol_spherical_in.com', str(t_eff), str(g), str(f), output],
-                    stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
-                stdout, stderr = p.communicate()
-            except subprocess.CalledProcessError:
-                raise RuntimeError('Spherical Model atmosphere interpolation failed ....')
-            self.sphere = 'T'
+        # Loop over eight vertices of cuboidal cell in parameter space, collecting MARCS models
+        marcs_model_list = []
+        failures = True
+        while failures:
+            marcs_model_list = []
+            failures = 0
+            n_vertices = 2 ** len(interpolate_parameters)
+            for vertex in range(n_vertices):  # Loop over 8 vertices
+                dict_iter = self.marcs_models  # Navigate through dictionary tree of MARCS models we have
+                try:
+                    for parameter in self.marcs_value_keys:
+                        value = marcs_parameters[parameter]
+                        # When we encounter Teff, log_g or metallicity, we get two options, not a single value
+                        # Choose which one to use by looking at the binary bits of <vertex> as it counts from 0 to 7
+                        if isinstance(value, (list, tuple)):
+                            option_number = int(bool(vertex & (2 ** interpolate_parameters.index(parameter))))  # 0 or 1
+                            value = value[option_number]
+                        if value not in dict_iter:
+                            dict_iter[value] = {}
+                        dict_iter = dict_iter[value]  # Step to next level of dictionary tree
+                    dict_iter = dict_iter['filename']
+                except KeyError:
+                    dict_iter = None
+                    failures += 1
+                marcs_model_list.append(dict_iter)
+
+            # If there are MARCS models missing from the corners of the cuboid we tried, see which face had the most
+            # corners missing, and move that face out by one grid row
+            if failures:
+                n_faces = 2 * len(interpolate_parameters)
+                failures_per_face = []
+                for cuboid_face_no in range(n_faces):  # Loop over 6 faces of cuboid
+                    failure_count = 0
+                    parameter_no = int(cuboid_face_no / 2)
+                    option_no = cuboid_face_no & 1
+                    for vertex in range(n_vertices):  # Loop over 8 vertices
+                        if marcs_model_list[vertex] is None:
+                            failure_option_no = int(bool(vertex & (2 ** parameter_no)))  # This is 0/1
+                            if option_no == failure_option_no:
+                                failure_count += 1
+                    failures_per_face.append([failure_count, parameter_no, option_no])
+                failures_per_face.sort(key=itemgetter(0))
+
+                face_to_move = failures_per_face[-1]
+                failure_count, parameter_no, option_no = face_to_move
+                parameter_to_move = interpolate_parameters[parameter_no]
+                options = self.marcs_values[parameter_to_move]
+                parameter_descriptor = marcs_parameters[parameter_to_move]
+
+                if option_no == 0:
+                    parameter_descriptor[2] -= 1
+                    assert parameter_descriptor[2] >= 0, \
+                        "Value of parameter <{}> needs to be in range {} to {}. You requested {}, " \
+                        "and due to missing models we could not interpolate.". \
+                            format(parameter_to_move, options[0], options[-1], value)
+                    parameter_descriptor[0] = options[parameter_descriptor[2]]
+                else:
+                    parameter_descriptor[3] += 1
+                    assert parameter_descriptor[3] < len(options), \
+                        "Value of parameter <{}> needs to be in range {} to {}. You requested {}, " \
+                        "and due to missing models we could not interpolate.". \
+                            format(parameter_to_move, options[0], options[-1], value)
+                    parameter_descriptor[1] = options[parameter_descriptor[3]]
+
+        # Now we run the FORTRAN model interpolator
+        output = os_path.join(self.tmp_dir, self.marcs_model_name)
+        model_test = "{}.test".format(output)
+        try:
+            p = subprocess.Popen([os_path.join(self.interpol_path, 'interpol_modeles')],
+                                 stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
+            for line in marcs_model_list:
+                p.stdin.write("{}\n".format(line))
+            p.stdin.write("{}.interpol\n".format(output))
+            p.stdin.write("{}.alt\n".format(output))
+            p.stdin.write("{}\n".format(self.t_eff))
+            p.stdin.write("{}\n".format(self.log_g))
+            p.stdin.write("{}\n".format(self.metallicity))
+            p.stdin.write(
+                ".true.\n")  # the test option is set to .true. if you want to plot comparison model (model_test)
+            p.stdin.write(".false.\n")  # MARCS binary format (.true.) or MARCS ASCII web format (.false.)?
+            p.stdin.write("{}\n".format(model_test))
+
+            stdout, stderr = p.communicate()
+        except subprocess.CalledProcessError:
+            raise RuntimeError('MARCS model atmosphere interpolation failed ....')
 
         return
 
@@ -361,7 +444,7 @@ class TurboSpectrum:
 'LAMBDA_MIN:'    '{this[lambda_min]:.3f}'
 'LAMBDA_MAX:'    '{this[lambda_max]:.3f}'
 'LAMBDA_STEP:'    '{this[lambda_delta]:.3f}'
-'MODELINPUT:' '{this[tmp_dir]}/'
+'MODELINPUT:' '{this[tmp_dir]}/{this[marcs_model_name]}'
 'MARCS-FILE:' '.false.'
 'MODELOPAC:' '{this[tmp_dir]}/model_opacity.opac'
 'METALLICITY:'    '{this[metallicity]:.2f}'
@@ -423,5 +506,5 @@ class TurboSpectrum:
 
         return {
             "return_code": pr.returncode,
-            "output_file": os_path.join(self.tmp_dir,"spectrum_{:08d}.spec".format(self.counter_spectra))
-                }
+            "output_file": os_path.join(self.tmp_dir, "spectrum_{:08d}.spec".format(self.counter_spectra))
+        }
