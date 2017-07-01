@@ -66,27 +66,34 @@ class TurboSpectrum:
         self.lambda_max = 5200
         self.lambda_delta = 0.05
         self.metallicity = -1.5
+        self.stellar_mass = 1
+        self.log_g = 0
+        self.t_eff = 5000
         self.turbulent_velocity = 1.0
         self.free_abundances = None
         self.sphere = None
         self.alpha = None
         self.s_process = 0
         self.r_process = 0
-        self.star_name = "anonymous_star"
         self.verbose = True
         self.line_list_files = None
-        self.spec_file = "test1.spec"
 
         # Create temporary directory
-        self.id_string = "turbospec_%d" % os.getpid()
+        self.id_string = "turbospec_{:d}".format(os.getpid())
         self.tmp_dir = os_path.join("/tmp", self.id_string)
-        os.system("mkdir -p %s" % self.tmp_dir)
+        os.system("mkdir -p {}".format(self.tmp_dir))
 
         # Look up what MARCS models we have
+        self.counter_marcs = 0
+        self.counter_spectra = 0
         self.marcs_values = None
         self.marcs_value_keys = []
         self.marcs_models = {}
         self._fetch_marcs_grid()
+
+    def close(self):
+        # Remove temporary directory
+        os.system("rm -Rf {}".format(self.tmp_dir))
 
     def _fetch_marcs_grid(self):
         """
@@ -154,9 +161,10 @@ class TurboSpectrum:
         for parameter in self.marcs_value_keys:
             self.marcs_values[parameter].sort()
 
-    def configure(self, lambda_min=None, lambda_max=None, lambda_delta=None, metallicity=None,
+    def configure(self, lambda_min=None, lambda_max=None, lambda_delta=None,
+                  metallicity=None, log_g=None, t_eff=None, stellar_mass=None,
                   turbulent_velocity=None, free_abundances=None,
-                  sphere=None, spec_file=None, alpha=None, s_process=None, r_process=None, star_name=None,
+                  sphere=None, alpha=None, s_process=None, r_process=None,
                   line_list_paths=None, line_list_files=None,
                   verbose=True):
         """
@@ -171,21 +179,24 @@ class TurboSpectrum:
         :param lambda_delta:
             Wavelength step of the synthetic spectra we generate. Unit: A.
         :param metallicity:
-            Metallicity of the star we're synthesising.
+            Metallicity of the star we're synthesizing.
+        :param t_eff:
+            Effective temperature of the star we're synthesizing.
+        :param log_g:
+            Log(gravity) of the star we're synthesizing.
+        :param stellar_mass:
+            Mass of the star we're synthesizing (solar masses).
         :param turbulent_velocity:
         :param free_abundances:
             List of elemental abundances to use in stellar model. These are passed to Turbospectrum.
         :param sphere:
             Select whether to use a spherical model (True) or a plane-parallel model (False).
-        :param spec_file:
         :param alpha:
             Alpha enhancement to use in stellar model.
         :param s_process:
             S-Process element enhancement to use in stellar model.
         :param r_process:
             R-Process element enhancement to use in stellar model.
-        :param star_name:
-            The name of the star being modelled.
         :param line_list_paths:
             List of paths where we should search for line lists.
         :param line_list_files:
@@ -204,16 +215,18 @@ class TurboSpectrum:
             self.lambda_delta = lambda_delta
         if metallicity is not None:
             self.metallicity = metallicity
-        if star_name is not None:
-            self.star_name = star_name
+        if t_eff is not None:
+            self.t_eff = t_eff
+        if log_g is not None:
+            self.log_g = log_g
+        if stellar_mass is not None:
+            self.stellar_mass = stellar_mass
         if turbulent_velocity is not None:
             self.turbulent_velocity = turbulent_velocity
         if free_abundances is not None:
             self.free_abundances = free_abundances
         if sphere is not None:
             self.sphere = sphere
-        if spec_file is not None:
-            self.spec_file = spec_file
         if alpha is not None:
             self.alpha = alpha
         if s_process is not None:
@@ -229,15 +242,6 @@ class TurboSpectrum:
         if verbose is not None:
             self.verbose = verbose
 
-        # ------ assume an alpha enhancement ----
-        if self.alpha is None:
-            if self.metallicity < -1.0:
-                self.alpha = 0.4
-            elif -1.0 < self.metallicity < 0.0:
-                self.alpha = -0.4 * self.metallicity
-            else:
-                self.alpha = 0
-
     def _generate_model_atmosphere(self, t_eff, g, f):
         """
         Generates an interpolated model atmosphere from the MARCS grid using the interpol.f routine developed by
@@ -251,6 +255,7 @@ class TurboSpectrum:
             [Fe/H] metallicity of requested model atmosphere.
 
         """
+        self.counter_marcs += 1
 
         if self.verbose:
             stdout = subprocess.STDOUT
@@ -261,12 +266,9 @@ class TurboSpectrum:
 
         # ----- defines the point at which Plane-Parallel vs spherical model atmosphere models are used
         if g >= 3.0:
-            if self.star_name is not None:
-                self.marcs_model_name = '%s_%ig%.2fm0.0z%.2f.int' % (self.star_name, t_eff, g, f)
-            else:
-                self.marcs_model_name = '%ig%.2fm0.0z%.2f.int' % (t_eff, g, f)
+            self.marcs_model_name = '%d_%ig%.2fm0.0z%.2f.int' % (self.counter_marcs, t_eff, g, f)
 
-            output = os_path.join(self.mod_path, self.marcs_model_name)
+            output = os_path.join(self.tmp_dir, self.marcs_model_name)
 
             try:
                 p = subprocess.Popen(
@@ -278,12 +280,9 @@ class TurboSpectrum:
             self.sphere = 'F'
 
         else:
-            if self.star_name is not None:
-                self.marcs_model_name = '%s_%ig%.2fm1.0z%.2f.int' % (self.star_name, t_eff, g, f)
-            else:
-                self.marcs_model_name = '%ig%.2fm1.0z%.2f.int' % (t_eff, g, f)
+            self.marcs_model_name = '%d_%ig%.2fm1.0z%.2f.int' % (self.counter_marcs, t_eff, g, f)
 
-            output = os_path.join(self.mod_path, self.marcs_model_name)
+            output = os_path.join(self.tmp_dir, self.marcs_model_name)
 
             try:
                 p = subprocess.Popen(
@@ -296,20 +295,20 @@ class TurboSpectrum:
 
         return
 
-    def make_babsmabysn_file(self):
-        '''
-        --------------------------------------------------------------------------------
-        | PURPOSE:
-        | Generate the parameter file for both the babsma and bsyn codes for turbospectrum
-        |
-        --------------------------------------------------------------------------------
-        '''
+    def make_babsma_bysn_file(self):
+        """
+        Generate the configurations files for both the babsma and bsyn binaries in Turbospectrum.
+        """
 
-        # Checks that model metallicity and input metallicity are consistent
-        model_metallicity = float(self.marcs_model_name.split('z')[1].split('.int')[0])
-        if (model_metallicity > self.metallicity + 0.05) or (model_metallicity < self.metallicity - 0.05):
-            logger.warn("Atmosphere model ({:.2f}) and input metallicity ({:.2f}) not consistent; proceed with caution".
-                        format(model_metallicity, self.metallicity))
+        # If we've not been given an explicit alpha enhancement value, assume one
+        alpha = self.alpha
+        if alpha is None:
+            if self.metallicity < -1.0:
+                alpha = 0.4
+            elif -1.0 < self.metallicity < 0.0:
+                alpha = -0.4 * self.metallicity
+            else:
+                alpha = 0
 
         # Allow for user input abundances as a dictionary of the form {element: abundance}
         if self.free_abundances is None:
@@ -339,9 +338,9 @@ class TurboSpectrum:
 'COS(THETA)    :' '1.00'
 'ABFIND        :' '.false.'
 'MODELOPAC:' '{this[tmp_dir]}/model_opacity.opac'
-'RESULTFILE :' '{this[tmp_dir]}/{this[spec_file]}.spec'
+'RESULTFILE :' '{this[tmp_dir]}/spectrum_{this[counter_spectra]:08d}.spec'
 'METALLICITY:'    '{this[metallicity]:.2f}'
-'ALPHA/Fe   :'    '{this[alpha]:.2f}'
+'ALPHA/Fe   :'    '{alpha:.2f}'
 'HELIUM     :'    '0.00'
 'R-PROCESS  :'    '{this[r_process]:.2f}'
 'S-PROCESS  :'    '{this[s_process]:.2f}'
@@ -355,7 +354,7 @@ class TurboSpectrum:
   300.00
   15
   1.30
-""".format(this=self.__dict__, individual_abundances=individual_abundances, line_lists=line_lists)
+""".format(this=self.__dict__, alpha=alpha, individual_abundances=individual_abundances, line_lists=line_lists)
 
         # Build babsma configuration file
         babsma_config = """\
@@ -366,29 +365,28 @@ class TurboSpectrum:
 'MARCS-FILE:' '.false.'
 'MODELOPAC:' '{this[tmp_dir]}/model_opacity.opac'
 'METALLICITY:'    '{this[metallicity]:.2f}'
-'ALPHA/Fe   :'    '{this[alpha]:.2f}'
+'ALPHA/Fe   :'    '{alpha:.2f}'
 'HELIUM     :'    '0.00'
 'R-PROCESS  :'    '{this[r_process]:.2f}'
 'S-PROCESS  :'    '{this[s_process]:.2f}'
 {individual_abundances}
 'XIFIX:' 'T'
 {this[turbulent_velocity]:.2f}
-""".format(this=self.__dict__, individual_abundances=individual_abundances)
+""".format(this=self.__dict__, alpha=alpha, individual_abundances=individual_abundances)
 
         return babsma_config, bsyn_config
 
-    def synthesise(self, stellarpar=None):
+    def synthesise(self):
+        """
+        Invoke Turbospectrum to synthesise a single spectrum.
+        """
+        self.counter_spectra += 1
 
-        if stellarpar is None:
-            babsma_in, bsyn_in = self.make_babsmabysn_file()
-        else:
-            if len(stellarpar) != 3:
-                raise ValueError('The stellarpar varible must be a list/array of length 3 = (Teff, logg, [Fe/H])')
-            else:
-                T, g, f = stellarpar
-                logger.info('Generating model atmosphere with T=%.1f, log g = %.2f, metallicity = %.2f' % (T, g, f))
-                self._generate_model_atmosphere(T, g, f)
-                babsma_in, bsyn_in = self.make_babsmabysn_file()
+        logger.info("Generating model atmosphere with T={:.1f}, log_g = {:.2f}, metallicity = {:.2f}".
+                    format(self.t_eff, self.log_g, self.metallicity))
+
+        self._generate_model_atmosphere()
+        babsma_in, bsyn_in = self.make_babsma_bysn_file()
 
         if self.verbose:
             stdout = None
@@ -422,4 +420,8 @@ class TurboSpectrum:
         except subprocess.CalledProcessError:
             raise RuntimeError('babsma failed ....')
         logger.info("%s %s" % (pr.returncode, stderr))
-        return pr.returncode
+
+        return {
+            "return_code": pr.returncode,
+            "output_file": os_path.join(self.tmp_dir,"spectrum_{:08d}.spec".format(self.counter_spectra))
+                }
