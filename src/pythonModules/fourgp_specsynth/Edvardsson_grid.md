@@ -50,3 +50,23 @@ hc:  3985
 mc:  3931
 st: 15680
 ```
+
+The distribution of number of models per mass is:
+
+```
+ 0.0: 18209
+ 0.5:  3755
+ 1.0: 21773
+ 2.0:  3978
+ 5.0:  3999
+15.0:   280
+```
+
+The distribution of number of models per turbulence setting is:
+
+```
+0.0:  4518
+1.0:  7077
+2.0: 23493
+5.0: 16906
+```

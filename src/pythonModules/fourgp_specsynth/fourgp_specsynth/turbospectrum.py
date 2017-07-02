@@ -5,7 +5,6 @@
 A class which wraps Turbospectrum
 """
 
-import numpy as np
 import subprocess
 import os
 from os import path as os_path
@@ -189,6 +188,7 @@ class TurboSpectrum:
         :param stellar_mass:
             Mass of the star we're synthesizing (solar masses).
         :param turbulent_velocity:
+            Turbulent velocity in km/s
         :param free_abundances:
             List of elemental abundances to use in stellar model. These are passed to Turbospectrum.
         :param sphere:
@@ -253,7 +253,7 @@ class TurboSpectrum:
         self.marcs_model_name = "marcs_{:08d}".format(self.counter_marcs)
 
         if self.verbose:
-            stdout = subprocess.STDOUT
+            stdout = None
             stderr = subprocess.STDOUT
         else:
             stdout = open('/dev/null', 'w')
@@ -265,9 +265,9 @@ class TurboSpectrum:
             spherical = (self.log_g < 3)
 
         # Default MARCS model settings
-        marcs_parameters = {"spherical": spherical,
-                            "mass": 0,
-                            "turbulence": 0,
+        marcs_parameters = {"spherical": "s" if spherical else "p",
+                            "mass": 1,
+                            "turbulence": 2,
                             "model_type": "st",
                             "a": 0, "c": 0, "n": 0, "o": 0, "r": 0, "s": 0}
 
@@ -288,7 +288,7 @@ class TurboSpectrum:
             for index in range(len(options)):
                 if value <= options[index]:
                     break
-            marcs_parameters[key] = [options[index], options[index + 1], index, index+1]
+            marcs_parameters[key] = [options[index], options[index + 1], index, index + 1]
 
         # Loop over eight vertices of cuboidal cell in parameter space, collecting MARCS models
         marcs_model_list = []
@@ -298,6 +298,9 @@ class TurboSpectrum:
             failures = 0
             n_vertices = 2 ** len(interpolate_parameters)
             for vertex in range(n_vertices):  # Loop over 8 vertices
+                model_description = []
+                failed_on_parameter = "None"
+                parameter = "None"
                 dict_iter = self.marcs_models  # Navigate through dictionary tree of MARCS models we have
                 try:
                     for parameter in self.marcs_value_keys:
@@ -307,14 +310,17 @@ class TurboSpectrum:
                         if isinstance(value, (list, tuple)):
                             option_number = int(bool(vertex & (2 ** interpolate_parameters.index(parameter))))  # 0 or 1
                             value = value[option_number]
-                        if value not in dict_iter:
-                            dict_iter[value] = {}
+                            model_description.append(str(value))
                         dict_iter = dict_iter[value]  # Step to next level of dictionary tree
                     dict_iter = dict_iter['filename']
                 except KeyError:
                     dict_iter = None
+                    failed_on_parameter = parameter
                     failures += 1
                 marcs_model_list.append(dict_iter)
+                model_description = "<" + ", ".join(model_description) + ">"
+                # logger.info("Tried {}. Failed on <{}>.".format(model_description, failed_on_parameter))
+            logger.info("Found {:d}/{:d} model atmospheres.".format(n_vertices - failures, n_vertices))
 
             # If there are MARCS models missing from the corners of the cuboid we tried, see which face had the most
             # corners missing, and move that face out by one grid row
@@ -344,41 +350,56 @@ class TurboSpectrum:
                     assert parameter_descriptor[2] >= 0, \
                         "Value of parameter <{}> needs to be in range {} to {}. You requested {}, " \
                         "and due to missing models we could not interpolate.". \
-                            format(parameter_to_move, options[0], options[-1], value)
+                            format(parameter_to_move, options[0], options[-1],
+                                   interpolate_parameters_around[parameter_to_move])
+                    logger.info("Moving lower bound of parameter <{}> from {} to {} and trying again. "
+                                "This setting previously had {} failures.".
+                                format(parameter_to_move, parameter_descriptor[0],
+                                       options[parameter_descriptor[2]], failure_count))
                     parameter_descriptor[0] = options[parameter_descriptor[2]]
                 else:
                     parameter_descriptor[3] += 1
                     assert parameter_descriptor[3] < len(options), \
                         "Value of parameter <{}> needs to be in range {} to {}. You requested {}, " \
                         "and due to missing models we could not interpolate.". \
-                            format(parameter_to_move, options[0], options[-1], value)
+                            format(parameter_to_move, options[0], options[-1],
+                                   interpolate_parameters_around[parameter_to_move])
+                    logger.info("Moving upper bound of parameter <{}> from {} to {} and trying again. "
+                                "This setting previously had {} failures.".
+                                format(parameter_to_move, parameter_descriptor[1],
+                                       options[parameter_descriptor[3]], failure_count))
                     parameter_descriptor[1] = options[parameter_descriptor[3]]
-
-        # Now we run the FORTRAN model interpolator
+                    
+        # Write configuration input for interpolator
         output = os_path.join(self.tmp_dir, self.marcs_model_name)
         model_test = "{}.test".format(output)
+        interpol_config = ""
+        for line in marcs_model_list:
+            interpol_config += "'{}'\n".format(line)
+        interpol_config += "'{}.interpol'\n".format(output)
+        interpol_config += "'{}.alt'\n".format(output)
+        interpol_config += "{}\n".format(self.t_eff)
+        interpol_config += "{}\n".format(self.log_g)
+        interpol_config += "{}\n".format(self.metallicity)
+        interpol_config += ".false.\n"  # test option - set to .true. if you want to plot comparison model (model_test)
+        interpol_config += ".false.\n"  # MARCS binary format (.true.) or MARCS ASCII web format (.false.)?
+        interpol_config += "'{}'\n".format(model_test)
+
+        # Now we run the FORTRAN model interpolator
+        print interpol_config
         try:
             p = subprocess.Popen([os_path.join(self.interpol_path, 'interpol_modeles')],
                                  stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
-            for line in marcs_model_list:
-                p.stdin.write("{}\n".format(line))
-            p.stdin.write("{}.interpol\n".format(output))
-            p.stdin.write("{}.alt\n".format(output))
-            p.stdin.write("{}\n".format(self.t_eff))
-            p.stdin.write("{}\n".format(self.log_g))
-            p.stdin.write("{}\n".format(self.metallicity))
-            p.stdin.write(
-                ".true.\n")  # the test option is set to .true. if you want to plot comparison model (model_test)
-            p.stdin.write(".false.\n")  # MARCS binary format (.true.) or MARCS ASCII web format (.false.)?
-            p.stdin.write("{}\n".format(model_test))
-
+            p.stdin.write(interpol_config)
             stdout, stderr = p.communicate()
         except subprocess.CalledProcessError:
             raise RuntimeError('MARCS model atmosphere interpolation failed ....')
 
-        return
+        return {
+            "spherical": spherical
+        }
 
-    def make_babsma_bysn_file(self):
+    def make_babsma_bysn_file(self, spherical):
         """
         Generate the configurations files for both the babsma and bsyn binaries in Turbospectrum.
         """
@@ -408,11 +429,20 @@ class TurboSpectrum:
                                                                  float(solar_abundances[element]) + float(abundance))
 
         # Make a list of line-list files
-        line_lists = "'NFILES   :' '{:d}'\n".format(len(self.line_list_files))
-        for item in self.line_list_files:
-            line_lists += "%s\n".format(item)
+        line_list_files = []
+        for line_list_path in self.line_list_paths:
+            line_list_files.extend(glob.glob(os_path.join(line_list_path,"*")))
 
-        # Build bysn configuration file
+        if self.line_list_files is not None:
+            line_list_files = [item for item in line_list_files if os_path.split(item)[1] in self.line_list_files]
+
+        line_lists = "'NFILES   :' '{:d}'\n".format(len(line_list_files))
+        for item in line_list_files:
+            line_lists += "{}\n".format(item)
+
+        # Build bsyn configuration file
+        spherical_boolean_code = "T" if spherical else "F"
+
         bsyn_config = """\
 'LAMBDA_MIN:'    '{this[lambda_min]:.3f}'
 'LAMBDA_MAX:'    '{this[lambda_max]:.3f}'
@@ -429,22 +459,27 @@ class TurboSpectrum:
 'S-PROCESS  :'    '{this[s_process]:.2f}'
 {individual_abundances}
 'ISOTOPES : ' '2'
-'3.006  0.075
-'3.007  0.925
+3.006  0.075
+3.007  0.925
 {line_lists}
-'SPHERICAL:'  '{this[sphere]}'
+'SPHERICAL:'  '{spherical}'
   30
   300.00
   15
   1.30
-""".format(this=self.__dict__, alpha=alpha, individual_abundances=individual_abundances, line_lists=line_lists)
+""".format(this=self.__dict__,
+           alpha=alpha,
+           spherical=spherical_boolean_code,
+           individual_abundances=individual_abundances.strip(),
+           line_lists=line_lists.strip()
+           )
 
         # Build babsma configuration file
         babsma_config = """\
 'LAMBDA_MIN:'    '{this[lambda_min]:.3f}'
 'LAMBDA_MAX:'    '{this[lambda_max]:.3f}'
 'LAMBDA_STEP:'    '{this[lambda_delta]:.3f}'
-'MODELINPUT:' '{this[tmp_dir]}/{this[marcs_model_name]}'
+'MODELINPUT:' '{this[tmp_dir]}/{this[marcs_model_name]}.interpol'
 'MARCS-FILE:' '.false.'
 'MODELOPAC:' '{this[tmp_dir]}/model_opacity.opac'
 'METALLICITY:'    '{this[metallicity]:.2f}'
@@ -455,22 +490,31 @@ class TurboSpectrum:
 {individual_abundances}
 'XIFIX:' 'T'
 {this[turbulent_velocity]:.2f}
-""".format(this=self.__dict__, alpha=alpha, individual_abundances=individual_abundances)
+""".format(this=self.__dict__,
+           alpha=alpha,
+           individual_abundances=individual_abundances.strip()
+           )
 
+        print babsma_config
+        print bsyn_config
         return babsma_config, bsyn_config
 
     def synthesise(self):
         """
-        Invoke Turbospectrum to synthesise a single spectrum.
+        Invoke Turbospectrum to synthesize a single spectrum.
         """
         self.counter_spectra += 1
 
+        # Generate an interpolated MARCs model for requested Teff, metallicity and log_g
         logger.info("Generating model atmosphere with T={:.1f}, log_g = {:.2f}, metallicity = {:.2f}".
                     format(self.t_eff, self.log_g, self.metallicity))
 
-        self._generate_model_atmosphere()
-        babsma_in, bsyn_in = self.make_babsma_bysn_file()
+        atmosphere_properties = self._generate_model_atmosphere()
 
+        # Generate configuation files to pass to babsma and bsyn
+        babsma_in, bsyn_in = self.make_babsma_bysn_file(spherical=atmosphere_properties['spherical'])
+
+        # Select whether we want to see all the output that babsma and bsyn send to the terminal
         if self.verbose:
             stdout = None
             stderr = subprocess.STDOUT
@@ -478,32 +522,38 @@ class TurboSpectrum:
             stdout = open('/dev/null', 'w')
             stderr = subprocess.STDOUT
 
+        # We need to run babsma and bsyn with working directory set to root of Turbospectrum install. Otherwise
+        # it cannot find its data files.
+        cwd = os.getcwd()
+        turbospec_root = os_path.join(self.turbospec_path, "..")
+
+        # Run babsma. This creates an opacity file .opac from the MARCS atmospheric model
         try:
+            os.chdir(turbospec_root)
             pr1 = subprocess.Popen([os_path.join(self.turbospec_path, 'babsma_lu')],
                                    stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
-            for line in babsma_in.splitlines():
-                pr1.stdin.write(line)
+            pr1.stdin.write(babsma_in)
             stdout, stderr = pr1.communicate()
         except subprocess.CalledProcessError:
             raise RuntimeError('babsma failed ....')
+        finally:
+            os.chdir(cwd)
         logger.info("%s %s" % (pr1.returncode, stderr))
 
-        if self.verbose:
-            stdout = None
-            stderr = subprocess.STDOUT
-        else:
-            stdout = open('/dev/null', 'w')
-            stderr = None
+        # Run bsyn. This synthesizes the spectrum
         try:
+            os.chdir(turbospec_root)
             pr = subprocess.Popen([os_path.join(self.turbospec_path, 'bsyn_lu')],
                                   stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
-            for line in bsyn_in:
-                pr.stdin.write(line)
+            pr.stdin.write(bsyn_in)
             stdout, stderr = pr.communicate()
         except subprocess.CalledProcessError:
-            raise RuntimeError('babsma failed ....')
+            raise RuntimeError('bsyn failed ....')
+        finally:
+            os.chdir(cwd)
         logger.info("%s %s" % (pr.returncode, stderr))
 
+        # Return output
         return {
             "return_code": pr.returncode,
             "output_file": os_path.join(self.tmp_dir, "spectrum_{:08d}.spec".format(self.counter_spectra))
