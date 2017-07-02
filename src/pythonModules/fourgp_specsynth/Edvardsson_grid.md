@@ -70,3 +70,21 @@ The distribution of number of models per turbulence setting is:
 2.0: 23493
 5.0: 16906
 ```
+
+The distribution of number of models per log_g is:
+
+```
+-0.5:   400
+ 0.0:  3307
+ 0.5:  2113
+ 1.0:  5445
+ 1.5:  2785
+ 2.0:  6465
+ 2.5:  3215
+ 3.0: 10123
+ 3.5:  6500
+ 4.0:  3270
+ 4.5:  3255
+ 5.0:  3265
+ 5.5:  1851
+```

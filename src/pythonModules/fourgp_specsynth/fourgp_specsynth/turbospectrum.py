@@ -283,10 +283,12 @@ class TurboSpectrum:
             value = interpolate_parameters_around[key]
             options = self.marcs_values[key]
             if (value < options[0]) or (value > options[-1]):
-                raise ValueError("Value of parameter <{}> needs to be in range {} to {}. You requested {}.".
-                                 format(key, options[0], options[-1], value))
-            for index in range(len(options)):
-                if value <= options[index]:
+                return {
+                    "errors": "Value of parameter <{}> needs to be in range {} to {}. You requested {}.".
+                        format(key, options[0], options[-1], value)
+                }
+            for index in range(len(options)-1):
+                if value < options[index+1]:
                     break
             marcs_parameters[key] = [options[index], options[index + 1], index, index + 1]
 
@@ -347,11 +349,14 @@ class TurboSpectrum:
 
                 if option_no == 0:
                     parameter_descriptor[2] -= 1
-                    assert parameter_descriptor[2] >= 0, \
-                        "Value of parameter <{}> needs to be in range {} to {}. You requested {}, " \
-                        "and due to missing models we could not interpolate.". \
-                            format(parameter_to_move, options[0], options[-1],
-                                   interpolate_parameters_around[parameter_to_move])
+                    if parameter_descriptor[2] < 0:
+                        return {
+                            "errors":
+                                "Value of parameter <{}> needs to be in range {} to {}. You requested {}, " \
+                                "and due to missing models we could not interpolate.". \
+                                    format(parameter_to_move, options[0], options[-1],
+                                           interpolate_parameters_around[parameter_to_move])
+                        }
                     logger.info("Moving lower bound of parameter <{}> from {} to {} and trying again. "
                                 "This setting previously had {} failures.".
                                 format(parameter_to_move, parameter_descriptor[0],
@@ -359,17 +364,20 @@ class TurboSpectrum:
                     parameter_descriptor[0] = options[parameter_descriptor[2]]
                 else:
                     parameter_descriptor[3] += 1
-                    assert parameter_descriptor[3] < len(options), \
-                        "Value of parameter <{}> needs to be in range {} to {}. You requested {}, " \
-                        "and due to missing models we could not interpolate.". \
-                            format(parameter_to_move, options[0], options[-1],
-                                   interpolate_parameters_around[parameter_to_move])
+                    if parameter_descriptor[3] >= len(options):
+                        return {
+                            "errors":
+                                "Value of parameter <{}> needs to be in range {} to {}. You requested {}, " \
+                                "and due to missing models we could not interpolate.". \
+                                    format(parameter_to_move, options[0], options[-1],
+                                           interpolate_parameters_around[parameter_to_move])
+                        }
                     logger.info("Moving upper bound of parameter <{}> from {} to {} and trying again. "
                                 "This setting previously had {} failures.".
                                 format(parameter_to_move, parameter_descriptor[1],
                                        options[parameter_descriptor[3]], failure_count))
                     parameter_descriptor[1] = options[parameter_descriptor[3]]
-                    
+
         # Write configuration input for interpolator
         output = os_path.join(self.tmp_dir, self.marcs_model_name)
         model_test = "{}.test".format(output)
@@ -386,17 +394,20 @@ class TurboSpectrum:
         interpol_config += "'{}'\n".format(model_test)
 
         # Now we run the FORTRAN model interpolator
-        print interpol_config
+        # print interpol_config
         try:
             p = subprocess.Popen([os_path.join(self.interpol_path, 'interpol_modeles')],
                                  stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
             p.stdin.write(interpol_config)
             stdout, stderr = p.communicate()
         except subprocess.CalledProcessError:
-            raise RuntimeError('MARCS model atmosphere interpolation failed ....')
+            return {
+                "errors": "MARCS model atmosphere interpolation failed."
+            }
 
         return {
-            "spherical": spherical
+            "spherical": spherical,
+            "errors": None
         }
 
     def make_babsma_bysn_file(self, spherical):
@@ -429,13 +440,18 @@ class TurboSpectrum:
                                                                  float(solar_abundances[element]) + float(abundance))
 
         # Make a list of line-list files
+        # We start by getting a list of all files in the line list directories we've been pointed towards,
+        # excluding any text files we find.
         line_list_files = []
         for line_list_path in self.line_list_paths:
-            line_list_files.extend(glob.glob(os_path.join(line_list_path,"*")))
+            line_list_files.extend([i for i in glob.glob(os_path.join(line_list_path, "*")) if not i.endswith(".txt")])
 
+        # If an explicit list of line_list_files is set, we treat this as a list of filenames within the specified
+        # line_list_path, and we only allow files with matching filenames
         if self.line_list_files is not None:
             line_list_files = [item for item in line_list_files if os_path.split(item)[1] in self.line_list_files]
 
+        # Encode list of line lists into a string to pass to bsyn
         line_lists = "'NFILES   :' '{:d}'\n".format(len(line_list_files))
         for item in line_list_files:
             line_lists += "{}\n".format(item)
@@ -450,7 +466,7 @@ class TurboSpectrum:
 'INTENSITY/FLUX:' 'Flux'
 'COS(THETA)    :' '1.00'
 'ABFIND        :' '.false.'
-'MODELOPAC:' '{this[tmp_dir]}/model_opacity.opac'
+'MODELOPAC:' '{this[tmp_dir]}/model_opacity_{this[counter_spectra]:08d}.opac'
 'RESULTFILE :' '{this[tmp_dir]}/spectrum_{this[counter_spectra]:08d}.spec'
 'METALLICITY:'    '{this[metallicity]:.2f}'
 'ALPHA/Fe   :'    '{alpha:.2f}'
@@ -481,7 +497,7 @@ class TurboSpectrum:
 'LAMBDA_STEP:'    '{this[lambda_delta]:.3f}'
 'MODELINPUT:' '{this[tmp_dir]}/{this[marcs_model_name]}.interpol'
 'MARCS-FILE:' '.false.'
-'MODELOPAC:' '{this[tmp_dir]}/model_opacity.opac'
+'MODELOPAC:' '{this[tmp_dir]}/model_opacity_{this[counter_spectra]:08d}.opac'
 'METALLICITY:'    '{this[metallicity]:.2f}'
 'ALPHA/Fe   :'    '{alpha:.2f}'
 'HELIUM     :'    '0.00'
@@ -495,8 +511,8 @@ class TurboSpectrum:
            individual_abundances=individual_abundances.strip()
            )
 
-        print babsma_config
-        print bsyn_config
+        # print babsma_config
+        # print bsyn_config
         return babsma_config, bsyn_config
 
     def synthesise(self):
@@ -510,6 +526,8 @@ class TurboSpectrum:
                     format(self.t_eff, self.log_g, self.metallicity))
 
         atmosphere_properties = self._generate_model_atmosphere()
+        if atmosphere_properties['errors']:
+            return atmosphere_properties
 
         # Generate configuation files to pass to babsma and bsyn
         babsma_in, bsyn_in = self.make_babsma_bysn_file(spherical=atmosphere_properties['spherical'])
@@ -535,7 +553,7 @@ class TurboSpectrum:
             pr1.stdin.write(babsma_in)
             stdout, stderr = pr1.communicate()
         except subprocess.CalledProcessError:
-            raise RuntimeError('babsma failed ....')
+            return {"errors": "babsma failed"}
         finally:
             os.chdir(cwd)
         logger.info("%s %s" % (pr1.returncode, stderr))
@@ -548,7 +566,7 @@ class TurboSpectrum:
             pr.stdin.write(bsyn_in)
             stdout, stderr = pr.communicate()
         except subprocess.CalledProcessError:
-            raise RuntimeError('bsyn failed ....')
+            return {"errors": "bsyn failed"}
         finally:
             os.chdir(cwd)
         logger.info("%s %s" % (pr.returncode, stderr))
@@ -556,5 +574,6 @@ class TurboSpectrum:
         # Return output
         return {
             "return_code": pr.returncode,
+            "errors": None,
             "output_file": os_path.join(self.tmp_dir, "spectrum_{:08d}.spec".format(self.counter_spectra))
         }
