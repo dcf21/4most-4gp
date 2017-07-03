@@ -8,6 +8,7 @@ A class which wraps Turbospectrum
 import subprocess
 import os
 from os import path as os_path
+import numpy as np
 import re
 import glob
 import logging
@@ -19,6 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 class TurboSpectrum:
+
+    # Default MARCS model settings to look for. These are fixed parameters which we don't (currently) allow user to vary
+    marcs_parameters = {"turbulence": 2, "model_type": "st",
+                        "a": 0, "c": 0, "n": 0, "o": 0, "r": 0, "s": 0}
+
+    # It is safe to ignore these parameters in MARCS model descriptions
+    # This includes interpolating between models with different values of these settings
+    marcs_parameters_to_ignore = ["a", "c", "n", "o", "r", "s"]
+
     def __init__(self,
                  turbospec_path="/home/dcf21/iwg7_pipeline/turbospectrum-15.1/exec-gf-v15.1",
                  interpol_path="/home/dcf21/iwg7_pipeline/interpol_marcs",
@@ -112,7 +122,7 @@ class TurboSpectrum:
             "metallicity": [], "a": [], "c": [], "n": [], "o": [], "r": [], "s": []
         }
 
-        self.marcs_value_keys = self.marcs_values.keys()
+        self.marcs_value_keys = [ i for i in self.marcs_values.keys() if i not in self.marcs_parameters_to_ignore ]
         self.marcs_value_keys.sort()
         self.marcs_models = {}
 
@@ -156,6 +166,8 @@ class TurboSpectrum:
                 if value not in dict_iter:
                     dict_iter[value] = {}
                 dict_iter = dict_iter[value]
+            if "filename" in dict_iter:
+                logger.info("Warning: MARCS model <{}> duplicates one we already have.".format(item))
             dict_iter["filename"] = item
 
         # Sort model parameter values into order
@@ -244,6 +256,27 @@ class TurboSpectrum:
         if verbose is not None:
             self.verbose = verbose
 
+    @staticmethod
+    def closest_available_value(target, options):
+        """
+        Return the option from a list which most closely matches some target value.
+
+        :param target:
+            The target value that we're trying to match.
+        :param options:
+            The list of possible values that we can try to match to target.
+        :return:
+            The option value which is closest to <target>.
+        """
+        mismatch_best = np.inf
+        option_best = None
+        for item in options:
+            mismatch = abs(target - item)
+            if mismatch < mismatch_best:
+                mismatch_best = mismatch
+                option_best = item
+        return option_best
+
     def _generate_model_atmosphere(self):
         """
         Generates an interpolated model atmosphere from the MARCS grid using the interpol.f routine developed by
@@ -264,12 +297,15 @@ class TurboSpectrum:
         if spherical is None:
             spherical = (self.log_g < 3)
 
-        # Default MARCS model settings
-        marcs_parameters = {"spherical": "s" if spherical else "p",
-                            "mass": 1,
-                            "turbulence": 2,
-                            "model_type": "st",
-                            "a": 0, "c": 0, "n": 0, "o": 0, "r": 0, "s": 0}
+        # Create dictionary of the MARCS model parameters we're looking for in grid
+        marcs_parameters = self.marcs_parameters.copy()
+        if spherical:
+            marcs_parameters['spherical'] = "s"
+            marcs_parameters['mass'] = self.closest_available_value(target=self.stellar_mass,
+                                                                    options=self.marcs_values['mass'])
+        else:
+            marcs_parameters['spherical'] = "p"
+            marcs_parameters['mass'] = 0  # All plane-parallel models have mass set to zero
 
         # Pick MARCS settings which bracket requested stellar parameters
         interpolate_parameters = ("metallicity", "log_g", "temperature")
@@ -287,8 +323,8 @@ class TurboSpectrum:
                     "errors": "Value of parameter <{}> needs to be in range {} to {}. You requested {}.".
                         format(key, options[0], options[-1], value)
                 }
-            for index in range(len(options)-1):
-                if value < options[index+1]:
+            for index in range(len(options) - 1):
+                if value < options[index + 1]:
                     break
             marcs_parameters[key] = [options[index], options[index + 1], index, index + 1]
 
@@ -300,28 +336,46 @@ class TurboSpectrum:
             failures = 0
             n_vertices = 2 ** len(interpolate_parameters)
             for vertex in range(n_vertices):  # Loop over 8 vertices
+                # Variables used to produce informative error message if we can't find a particular model
                 model_description = []
-                failed_on_parameter = "None"
+                failed_on_parameter = ("None", "None", "None")
+                value = "None"
                 parameter = "None"
+
+                # Start looking for a model that sits at this particular vertex of the cube
                 dict_iter = self.marcs_models  # Navigate through dictionary tree of MARCS models we have
                 try:
                     for parameter in self.marcs_value_keys:
                         value = marcs_parameters[parameter]
                         # When we encounter Teff, log_g or metallicity, we get two options, not a single value
                         # Choose which one to use by looking at the binary bits of <vertex> as it counts from 0 to 7
+                        # This tells us which particular vertex of the cube we're looking for
                         if isinstance(value, (list, tuple)):
                             option_number = int(bool(vertex & (2 ** interpolate_parameters.index(parameter))))  # 0 or 1
                             value = value[option_number]
-                            model_description.append(str(value))
-                        dict_iter = dict_iter[value]  # Step to next level of dictionary tree
+
+                        # Step to next level of dictionary tree
+                        model_description.append("{}={}".format(parameter, str(value)))
+                        dict_iter = dict_iter[value]
+                    # Success -- we've found a model which matches all requested parameter.
+                    # Extract filename of model we've found.
                     dict_iter = dict_iter['filename']
                 except KeyError:
+                    # We get a KeyError if there is no model matching the parameter combination we tried
+                    failed_on_parameter = (parameter, value, dict_iter.keys())
                     dict_iter = None
-                    failed_on_parameter = parameter
                     failures += 1
                 marcs_model_list.append(dict_iter)
                 model_description = "<" + ", ".join(model_description) + ">"
-                # logger.info("Tried {}. Failed on <{}>.".format(model_description, failed_on_parameter))
+
+                # Produce debugging information about how we did finding models, but only if we want to be verbose
+                if False:
+                    if not failures:
+                        logger.info("Tried {}. Success.".format(model_description))
+                    else:
+                        logger.info("Tried {}. Failed on <{}>. Wanted {}, but only options were: {}.".
+                                    format(model_description, failed_on_parameter[0],
+                                           failed_on_parameter[1], failed_on_parameter[2]))
             logger.info("Found {:d}/{:d} model atmospheres.".format(n_vertices - failures, n_vertices))
 
             # If there are MARCS models missing from the corners of the cuboid we tried, see which face had the most
