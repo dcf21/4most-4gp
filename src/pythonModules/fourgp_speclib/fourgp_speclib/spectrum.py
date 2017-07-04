@@ -115,7 +115,7 @@ class Spectrum(object):
         self._update_raster_hash()
 
     @classmethod
-    def from_file(cls, filename, binary=True, *args, **kwargs):
+    def from_file(cls, filename, binary=True, columns=None, *args, **kwargs):
         """
         Factory method to read a spectrum in from a text file.
         
@@ -130,6 +130,13 @@ class Spectrum(object):
 
         :type binary:
             bool
+
+        :param columns:
+            When reading text files, this specifies which columns the wavelength, value and value_error are in.
+            The default is (0, 1, 2).
+
+        :type columns:
+            list or tuple
             
         :return:
             Spectrum object
@@ -137,8 +144,33 @@ class Spectrum(object):
 
         assert os_path.exists(filename), "File <{}> does not exist.".format(filename)
 
+        # Extract spectrum from a text file
         if not binary:
-            wavelengths, values, value_errors = np.loadtxt(filename).T
+            # Work out which columns we are reading data from
+            if columns is None:
+                columns = (0, 1, 2)
+            assert isinstance(columns, (list, tuple)), "Columns must be specified as a list or a tuple."
+            assert len(columns) > 0, "At least one column must be specified to give us a wavelength raster."
+
+            # Read the contents of the text file
+            data = np.loadtxt(filename).T
+
+            # Read wavelengths from text file
+            wavelengths = data[columns[0]]
+
+            # Read values from text file, or fill with zeros if they are not specified
+            if len(columns) > 1:
+                values = data[columns[1]]
+            else:
+                values = np.zeros_like(wavelengths)
+
+            # Read value errors from text file, or fill with zeros if they are not specified
+            if len(columns) > 2:
+                value_errors = data[columns[2]]
+            else:
+                value_errors = np.zeros_like(wavelengths)
+
+        # Extract spectrum from a binary file
         else:
             wavelengths, values, value_errors = np.load(filename)
 
