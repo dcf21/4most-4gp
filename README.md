@@ -5,15 +5,25 @@ This code is under active development, but mostly doesn't exist yet.
 
 There are no stable releases yet, because this code isn't stable.
 
+# Installing dependencies
+
+Under Ubuntu 16.04, you need to install the following packages:
+
+```
+apt-get install git python-sqlite3 mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran
+```
+
+Under Ubuntu 14.04, you need to install these packages:
+
+```
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran
+```
+
 # Getting started
 
 To use this code, follow these steps in a Linux shell:
 
 ```
-# Make sure you have various packages installed
-apt-get install python-sqlite3 mysql-server
- 
-
 # Check out code from GitHub
 git clone https://github.com/dcf21/4most-4gp.git
  
@@ -25,11 +35,17 @@ pip install numpy scipy astropy MySQL-python
 # Install 4GP code
 cd src/pythonModules/fourgp_speclib
 python setup.py install
-cd ../fourgp_rv
+cd ../fourgp_cannon
 python setup.py install
 cd ../fourgp_degrade
 python setup.py install
-cd ../fourgp_cannon
+cd ../fourgp_rv
+python setup.py install
+cd ../fourgp_specsynth
+python setup.py install
+cd ../fourgp_telescope_data
+python setup.py install
+cd ../fourgp_fourfs
 python setup.py install
  
 # Create API documentation using sphinx
@@ -40,6 +56,41 @@ make html
 # View HTML documentation
 # At this point you need to edit your Apache configuration and point a webserver at the directory
 # docs/_build/html
+```
+
+# Installing Turbospectrum
+
+If you want to synthesize spectra using Turbospectrum, you need to do the following. Download the code, as follows:
+
+```
+wget http://www.pages-perso-bertrand-plez.univ-montp2.fr/DATA/Turbospectrum-v15.1.tar.gz
+wget http://marcs.astro.uu.se/documents/auxiliary/interpol_marcs.tar.gz
+```
+
+Proceed to build the tools as follows:
+
+```
+tar xvfz Turbospectrum-v15.1.tar.gz
+mv EXPORT-15.1 turbospectrum-15.1
+cd turbospectrum-15.1/exec-gf-v15.1/
+make
+ 
+tar xvfz interpol_marcs.tar.gz
+cd interpol_marcs
+gfortran interpol_modeles.f -o interpol_modeles
+```
+
+For more information, read the README.md file in the fourgp_specsynth directory.
+
+# Installing 4FS
+
+If you want to use 4FS, build it as follows:
+
+```
+git checkout https://dcf21@gitlab.4most.eu/tdwelly/OpSys.git
+sudo apt-get install libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy
+cd OpSys
+make
 ```
 
 # Further information
