@@ -44,7 +44,7 @@ class SpectrumLibrarySql(SpectrumLibrary):
 -- Table of spectrum libraries using this database
 CREATE TABLE libraries (
     libraryId INTEGER PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(1024) UNIQUE NOT NULL
+    name VARCHAR(760) UNIQUE NOT NULL
 );
 
 -- Table of string descriptions of which tools imported particular spectra into the library 
