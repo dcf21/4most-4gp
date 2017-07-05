@@ -104,6 +104,7 @@ The 4GP code comes with a set of unit tests to validate your installation.
 The tests include building spectrum libraries using both SQLite and MySQL databases. For all the tests to pass, you need to create a local MySQL database called ```fourgp_unittest```. A MySQL user account with username ```fourgp_unittest``` and password ```fourgp_unittest``` is needed with full access to this database:
  
 ```
+CREATE USER 'fourgp_unittest'@'localhost' IDENTIFIED BY 'fourgp_unittest';
 CREATE DATABASE fourgp_unittest;
 GRANT ALL ON fourgp_unittest.* TO 'fourgp_unittest'@'localhost';
 ```
