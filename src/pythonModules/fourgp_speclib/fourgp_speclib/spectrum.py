@@ -199,17 +199,19 @@ class Spectrum(object):
             bool
             
         :return:
-            None
+            bool: Success
         """
 
         if os_path.exists(filename) and not overwrite:
             logger.error("File <{}> already exists. Set overwrite API option to force overwriting of it.".format(
                 filename))
+            return False
 
         if not binary:
             np.savetxt(filename, np.transpose([self.wavelengths, self.values, self.value_errors]))
         else:
             np.save(filename, np.asarray([self.wavelengths, self.values, self.value_errors]))
+        return True
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,

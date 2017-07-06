@@ -736,9 +736,11 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
 
             # Write spectrum to text file
             spectrum = spectra if isinstance(spectra, Spectrum) else spectra.extract_item(index)
-            spectrum.to_file(filename=os_path.join(self._path, filename),
-                             overwrite=overwrite,
-                             binary=self._binary_spectra)
+            success = spectrum.to_file(filename=os_path.join(self._path, filename),
+                                       overwrite=overwrite,
+                                       binary=self._binary_spectra)
+            if not success:
+                continue
 
             # Create database entry a spectrum
             self._parameterised_query("""
