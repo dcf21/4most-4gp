@@ -11,6 +11,8 @@ import numpy as np
 import astropy.io.fits as fits
 import logging
 
+import config_files
+
 logger = logging.getLogger(__name__)
 
 
@@ -31,6 +33,16 @@ class FourFS:
         self.id_string = "4fs_{:d}".format(os.getpid())
         self.tmp_dir = os_path.join("/tmp", self.id_string)
         os.system("mkdir -p {}".format(self.tmp_dir))
+
+        # Put standard 4FS configuration files into temporary working directory
+        with open(os_path.join(self.tmp_dir, "ETC_input_params_HRS.txt")) as f:
+            f.write(config_files.ETC_input_params_HRS)
+
+        with open(os_path.join(self.tmp_dir, "ETC_input_params_LRS.txt")) as f:
+            f.write(config_files.ETC_input_params_LRS)
+
+        with open(os_path.join(self.tmp_dir, "rulelist.txt")) as f:
+            f.write(config_files.rulelist)
 
     def close(self):
         # Remove temporary directory
