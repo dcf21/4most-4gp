@@ -35,13 +35,13 @@ class FourFS:
         os.system("mkdir -p {}".format(self.tmp_dir))
 
         # Put standard 4FS configuration files into temporary working directory
-        with open(os_path.join(self.tmp_dir, "ETC_input_params_HRS.txt")) as f:
+        with open(os_path.join(self.tmp_dir, "ETC_input_params_HRS.txt"), "w") as f:
             f.write(config_files.ETC_input_params_HRS)
 
-        with open(os_path.join(self.tmp_dir, "ETC_input_params_LRS.txt")) as f:
+        with open(os_path.join(self.tmp_dir, "ETC_input_params_LRS.txt"), "w") as f:
             f.write(config_files.ETC_input_params_LRS)
 
-        with open(os_path.join(self.tmp_dir, "rulelist.txt")) as f:
+        with open(os_path.join(self.tmp_dir, "rulelist.txt"), "w") as f:
             f.write(config_files.rulelist)
 
     def close(self):
