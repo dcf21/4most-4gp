@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class FourFS:
     def __init__(self,
-                 path_to_4fs="/home/dcf21/iwg7_pipeline/OpSys/OpSim"
+                 path_to_4fs="/home/dcf21/iwg7_pipeline/OpSys/ETC"
                  ):
         """
         Instantiate a class for calling 4FS.
@@ -317,3 +317,8 @@ class FourFS:
                            header='Wavelength\tNormFlux\tNormFluxerr', delimiter='\t')
 
             return uncertainty_fluxes_final, normalised_fluxes_final, snr_final
+
+    def process_spectra(self, spectra_list, resolution=50000):
+        self.generate_4fs_template_list(spectra_list=spectra_list,
+                                        resolution=resolution)
+        elephant
