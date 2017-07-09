@@ -10,13 +10,13 @@ There are no stable releases yet, because this code isn't stable.
 Under Ubuntu 16.04, you need to install the following packages:
 
 ```
-apt-get install git python-sqlite3 mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran
+apt-get install git python-sqlite3 mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk
 ```
 
 Under Ubuntu 14.04, you need to install these packages:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk
 ```
 
 # Getting started

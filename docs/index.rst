@@ -10,7 +10,14 @@ Welcome to 4GP's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   api/modules.rst
+   api_cannon/modules.rst
+   api_degrade/modules.rst
+   api_fourfs/modules.rst
+   api_rv/modules.rst
+   api_speclib/modules.rst
+   api_specsynth/modules.rst
+   api_telescopes/modules.rst
+
 
 
 Indices and tables

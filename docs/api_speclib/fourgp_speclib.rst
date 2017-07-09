@@ -12,6 +12,14 @@ fourgp\_speclib\.spectrum module
     :undoc-members:
     :show-inheritance:
 
+fourgp\_speclib\.spectrum\_array module
+---------------------------------------
+
+.. automodule:: fourgp_speclib.spectrum_array
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 fourgp\_speclib\.spectrum\_library module
 -----------------------------------------
 
