@@ -44,6 +44,14 @@ class FourFS:
         with open(os_path.join(self.tmp_dir, "rulelist.txt"), "w") as f:
             f.write(config_files.rulelist)
 
+        # Extract 4MOST telescope description files
+        cwd = os.getcwd()
+        os.chdir(self.tmp_dir)
+        path_to_telescope_description = os_path.split(os_path.abspath(__file__))[0]
+        os.system("tar xvfz {}".format(os_path.join(path_to_telescope_description,
+                                                    "4FS_ETC_system_model_latest.tar.gz")))
+        os.chdir(cwd)
+
     def close(self):
         # Remove temporary directory
         os.system("rm -Rf {}".format(self.tmp_dir))
