@@ -303,9 +303,9 @@ class FourFS:
                 snr_final = np.array(list(snr_1) + list(snr_2) + list(snr_3))
 
                 # Load continuum spectra
-                dc = fits.open(path + 'specout_template_{}_c_{}_blue.fits'.format(i, setup))
-                d2c = fits.open(path + 'specout_template_{}_c_{}_green.fits'.format(i, setup))
-                d3c = fits.open(path + 'specout_template_{}_c_{}_red.fits'.format(i, setup))
+                dc = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_blue.fits'.format(i, setup)))
+                d2c = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_green.fits'.format(i, setup)))
+                d3c = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_red.fits'.format(i, setup)))
 
                 # Read the data from the FITS files
                 wavelengths_1c = dc[2].data['LAMBDA']
@@ -390,8 +390,8 @@ class FourFS:
         os.system("rm -Rf outdir_LRS outdir_HRS")
 
         # Run 4FS
-        os.system("{} PARAM_FILENAME=ETC_input_params_LRS.txt &> lrs_output.log".format(fourfs_command))
-        os.system("{} PARAM_FILENAME=ETC_input_params_HRS.txt &> hrs_output.log".format(fourfs_command))
+        os.system("{} PARAM_FILENAME=ETC_input_params_LRS.txt > lrs_output.log 2>&1".format(fourfs_command))
+        os.system("{} PARAM_FILENAME=ETC_input_params_HRS.txt > hrs_output.log 2>&1".format(fourfs_command))
 
         # Stitched 4MOST wavebands together
         output = {}
