@@ -5,4 +5,3 @@ fourgp_fourfs
    :maxdepth: 4
 
    fourgp_fourfs
-   setup

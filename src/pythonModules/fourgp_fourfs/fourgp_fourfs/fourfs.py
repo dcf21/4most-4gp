@@ -20,17 +20,25 @@ logger = logging.getLogger(__name__)
 
 class FourFS:
     def __init__(self,
-                 path_to_4fs="/home/dcf21/iwg7_pipeline/OpSys/ETC"
+                 path_to_4fs="/home/dcf21/iwg7_pipeline/OpSys/ETC",
+                 snr_list=None
                  ):
         """
         Instantiate a class for calling 4FS.
 
         :param path_to_4fs:
             Path to where 4FS binaries can be found.
+
+        :param snr_list:
+            List of the SNRs that we want 4FS to degrade input spectra to.
         """
         self.path_to_4fs = path_to_4fs
         self.template_counter = 0
         self.metadata_store = {}
+
+        if snr_list is None:
+            snr_list = ("05", "10", "15", "20", "50", "100", "250")
+        self.snr_list = snr_list
 
         # Create temporary directory
         self.id_string = "4fs_{:d}".format(os.getpid())
@@ -48,7 +56,7 @@ class FourFS:
             f.write(config_files.rulelist)
 
         with open(os_path.join(self.tmp_dir, "ruleset.txt"), "w") as f:
-            f.write(config_files.ruleset)
+            f.write(config_files.ruleset(snr_list=self.snr_list))
 
         # Extract 4MOST telescope description files
         cwd = os.getcwd()
@@ -193,7 +201,7 @@ class FourFS:
                                              resolution=(resolution is not None),
                                              continuum_only=True)
 
-            for snr in config_files.snr_list:
+            for snr in self.snr_list:
                 writestr += 'template_{}_SNR{} {} {} {} {} {} {}\n'.format(
                     self.template_counter,
                     snr,
@@ -205,7 +213,7 @@ class FourFS:
                 os_path.join(self.tmp_dir, 'template_{}.fits'.format(self.template_counter)),
                 'goodSNR250', '0.0', '0.0', '15.0', '15.0')
 
-            for snr in config_files.snr_list:
+            for snr in self.snr_list:
                 star_list.append('template_{}_SNR{}'.format(self.template_counter, snr))
             star_list.append('template_{}_c'.format(self.template_counter))
 
@@ -265,7 +273,7 @@ class FourFS:
         output = {}
         for i in template_numbers:
             output[i] = {}
-            for snr in config_files.snr_list:
+            for snr in self.snr_list:
                 setup_full = "SNR{}_{}".format(snr, setup)
                 # Load in the three output spectra -- blue, green, red arms
                 d = fits.open(os_path.join(path, 'specout_template_template_{}_{}_blue.fits'.format(i, setup_full)))

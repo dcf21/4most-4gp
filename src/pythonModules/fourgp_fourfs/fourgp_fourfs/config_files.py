@@ -209,8 +209,6 @@ OBS_PARAMS.TEXP              = "500"                                  # List of 
 OBS_PARAMS.NSUB              = "1"                                    # List of numbers of sub-exposures to simulate
 """
 
-snr_list = ("05", "10", "15", "20", "50", "100", "250")
-
 rulelist = """
 #RULE VARIABLE METRIC OPER VALUE L_MIN L_MAX L_UNIT DELTAL DELTAL_UNIT
 SNR60         SNR MEDIAN GE   60.0  522.5 569.0 NM     1.0    PIX
@@ -219,10 +217,14 @@ MEDIANSNRHRS  SNR MEDIAN DIV   1.0  520.0 560.0 NM     1.0    PIX
 MEDIANSNR     SNR MEDIAN DIV   1.0  618.0 668.0 NM     1.0    PIX
 """
 
-ruleset = """
+
+def ruleset(snr_list):
+    output = """
 #NAME     REQUIRED_VALUE EXPRESSION
 goodSNR60 60.0           MEDIANSNR
 """
 
-for snr in snr_list:
-    ruleset += "goodSNR{:3s} {:13.1f} MEDIANSNR\n".format(snr, float(snr))
+    for snr in snr_list:
+        output += "goodSNR{:3s} {:13.1f} MEDIANSNR\n".format(snr, float(snr))
+
+    return output
