@@ -366,13 +366,13 @@ class FourFS:
                 spectrum = Spectrum(wavelengths=wavelengths_final,
                                     values=fluxes_final,
                                     value_errors=fluxes_final / snr_final,
-                                    metadata=metadata)
+                                    metadata=metadata.copy())
 
                 metadata['continuum_normalised'] = 1
                 spectrum_continuum_normalised = Spectrum(wavelengths=wavelengths_final,
                                                          values=normalised_fluxes_final,
                                                          value_errors=uncertainty_fluxes_final,
-                                                         metadata=metadata)
+                                                         metadata=metadata.copy())
 
                 output[i][snr] = {
                     "spectrum": spectrum,
