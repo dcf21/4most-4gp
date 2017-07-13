@@ -48,7 +48,12 @@ def library_search(library):
     x = SpectrumLibrarySqlite(path=path)
     metadata_keys = x._metadata_fields
     metadata_keys.sort()
-    return render_template('library.html', path=args.path, library=library, metadata_keys=metadata_keys)
+    search = {"minima": {}, "maxima": {}}
+    for item in metadata_keys:
+        search['minima'][item] = ""
+        search['maxima'][item] = ""
+    return render_template('library.html', path=args.path, library=library, metadata_keys=metadata_keys,
+                           search=search)
 
 
 if __name__ == "__main__":

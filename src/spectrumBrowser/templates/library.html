@@ -1,11 +1,35 @@
 <h1>{{ library }}</h1>
 
+<p>Search for spectra...</p>
+
+<form method="POST" action="{{ self_url }}">
 <table>
+    <thead>
+    <tr>
+        <td>Metadata field</td>
+        <td>Minimum value</td>
+        <td>Maximum value</td>
+    </tr>
+    </thead>
+    <tbody>
     {% for item in metadata_keys %}
     <tr>
         <td>
             {{ item }}
         </td>
+        <td>
+            <input type="text" name="{{ item }}" value="{{ search.minima.item }}" />
+        </td>
+        <td>
+            <input type="text" name="{{ item }}" value="{{ search.maxima.item }}" />
+        </td>
     </tr>
     {% endfor %}
+    </tbody>
 </table>
+
+    <input class="btn btn-sm btn-primary" type="submit" value="Search..."/>
+
+</form>
+
+<hr />
