@@ -1,0 +1,37 @@
+<h1>Index of Spectrum Libraries</h1>
+
+<p>
+    Path: {{ path }}
+</p>
+
+<table>
+    <thead>
+    <tr>
+        <td>Name</td>
+        <td>Contents</td>
+    </tr>
+    </thead>
+    <tbody>
+    {% for library in libraries %}
+    <tr>
+        <td>
+            <a href="{{ library.url }}">
+                {{ library.name }}
+            </a>
+        </td>
+        <td>
+            {{ library.item_count }} spectra
+        </td>
+    </tr>
+    {% else %}
+    <tr>
+        <td>
+            No libraries present.
+        </td>
+        <td>
+
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>

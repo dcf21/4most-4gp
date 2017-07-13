@@ -30,7 +30,7 @@ git clone https://github.com/dcf21/4most-4gp.git
 # Set up a python virtual environment
 virtualenv virtualenv
 source virtualenv/bin/activate
-pip install numpy scipy astropy MySQL-python
+pip install numpy scipy astropy MySQL-python flask
 
 # Install 4GP code
 cd src/pythonModules/fourgp_speclib
