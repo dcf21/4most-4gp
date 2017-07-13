@@ -1,0 +1,26 @@
+<h1>{{ library }}</h1>
+
+    <table>
+        <thead>
+        <tr>
+            <td>Metadata field</td>
+            <td>Value</td>
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in metadata_keys %}
+        <tr>
+            <td>
+                {{ item }}
+            </td>
+            <td>
+                {{ metadata[item] }}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+
+<hr/>
+
