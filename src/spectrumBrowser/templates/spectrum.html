@@ -28,7 +28,14 @@
 
 <hr/>
 
-<div class="show_spectrum" data-source="{{data_url}}">
-    <canvas width="0" height="0"></canvas>
-</div>
+<form method="POST" action="{{self_url}}">
+    Show wavelengths from
+    <input style="width:80px;" type="text" name="lambda_min" value="{{lambda_min}}"/>
+    A to
+    <input style="width:80px;" type="text" name="lambda_max" value="{{lambda_max}}"/>
+    A.
+    <input class="btn btn-sm btn-primary" style="margin:20px 0; vertical-align: middle;" type="submit" value="Update..."/>
+</form>
+
+<img src="{{png_url}}">
 {% endblock %}

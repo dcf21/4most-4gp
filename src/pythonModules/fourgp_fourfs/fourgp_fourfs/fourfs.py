@@ -276,18 +276,18 @@ class FourFS:
             for snr in self.snr_list:
                 setup_full = "SNR{}_{}".format(snr, setup)
                 # Load in the three output spectra -- blue, green, red arms
-                d = fits.open(os_path.join(path, 'specout_template_template_{}_{}_blue.fits'.format(i, setup_full)))
+                d1 = fits.open(os_path.join(path, 'specout_template_template_{}_{}_blue.fits'.format(i, setup_full)))
                 d2 = fits.open(os_path.join(path, 'specout_template_template_{}_{}_green.fits'.format(i, setup_full)))
                 d3 = fits.open(os_path.join(path, 'specout_template_template_{}_{}_red.fits'.format(i, setup_full)))
 
                 # Read the data from the FITS files
-                wavelengths_1 = d[2].data['LAMBDA']
+                wavelengths_1 = d1[2].data['LAMBDA']
                 wavelengths_2 = d2[2].data['LAMBDA']
                 wavelengths_3 = d3[2].data['LAMBDA']
-                fluxes_1 = d[2].data['REALISATION'] - d[2].data['SKY']
+                fluxes_1 = d1[2].data['REALISATION'] - d1[2].data['SKY']
                 fluxes_2 = d2[2].data['REALISATION'] - d2[2].data['SKY']
                 fluxes_3 = d3[2].data['REALISATION'] - d3[2].data['SKY']
-                snr_1 = d[2].data['SNR']
+                snr_1 = d1[2].data['SNR']
                 snr_2 = d2[2].data['SNR']
                 snr_3 = d3[2].data['SNR']
 
@@ -311,17 +311,17 @@ class FourFS:
                 snr_final = np.array(list(snr_1) + list(snr_2) + list(snr_3))
 
                 # Load continuum spectra
-                dc = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_blue.fits'.format(i, setup)))
+                d1c = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_blue.fits'.format(i, setup)))
                 d2c = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_green.fits'.format(i, setup)))
                 d3c = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_red.fits'.format(i, setup)))
 
                 # Read the data from the FITS files
-                wavelengths_1c = dc[2].data['LAMBDA']
+                wavelengths_1c = d1c[2].data['LAMBDA']
                 wavelengths_2c = d2c[2].data['LAMBDA']
                 wavelengths_3c = d3c[2].data['LAMBDA']
-                fluxes_1c = dc[2].data['FLUENCE']
-                fluxes_2c = d2c[2].data['FLUENCE']
-                fluxes_3c = d3c[2].data['FLUENCE']
+                fluxes_1c = d1c[2].data['REALISATION'] - d1c[2].data['SKY']
+                fluxes_2c = d2c[2].data['REALISATION'] - d2c[2].data['SKY']
+                fluxes_3c = d3c[2].data['REALISATION'] - d3c[2].data['SKY']
 
                 if setup == 'LRS':
                     indices_1 = np.where(wavelengths_1c <= 5327.7)[0]
@@ -334,30 +334,22 @@ class FourFS:
                     fluxes_2c = fluxes_2c[indices_2]
                     fluxes_3c = fluxes_3c[indices_3]
 
-                normalised_fluxes_1 = fluxes_1 / (fluxes_1c * max(d[2].data['FLUENCE']) / max(fluxes_1c))
-                normalised_fluxes_2 = fluxes_2 / (fluxes_2c * max(d2[2].data['FLUENCE']) / max(fluxes_2c))
-                normalised_fluxes_3 = fluxes_3 / (fluxes_3c * max(d3[2].data['FLUENCE']) / max(fluxes_3c))
-
                 # Combine everything into one set of arrays to be saved
                 wavelengths_final_c = np.array(list(wavelengths_1c) + list(wavelengths_2c) + list(wavelengths_3c))
 
                 fluxes_final_c = np.array(
-                    list(fluxes_1c * max(d[2].data['FLUENCE']) / max(fluxes_1c)) +
-                    list(fluxes_2c * max(d2[2].data['FLUENCE']) / max(fluxes_2c)) +
-                    list(fluxes_3c * max(d3[2].data['FLUENCE']) / max(fluxes_3c)))
-
-                normalised_fluxes_final = np.array(list(normalised_fluxes_1) +
-                                                   list(normalised_fluxes_2) +
-                                                   list(normalised_fluxes_3))
-                uncertainty_fluxes_final = normalised_fluxes_final / snr_final
+                    list(fluxes_1c * max(fluxes_1) / max(fluxes_1c)) +
+                    list(fluxes_2c * max(fluxes_2) / max(fluxes_2c)) +
+                    list(fluxes_3c * max(fluxes_3) / max(fluxes_3c)))
 
                 # Do continuum normalisation
                 normalised_fluxes_final = fluxes_final / fluxes_final_c
+                normalised_fluxes_final = np.array(list(fluxes_1c) + list(fluxes_2c) + list(fluxes_3c))
 
                 # Remove bad pixels
                 # Any pixels where flux > 2 or flux < 0 get reset to zero for other downstream codes
-                normalised_fluxes_final[
-                    np.where((normalised_fluxes_final > 2.0) | (normalised_fluxes_final <= 0.00))[0]] = 0
+                # normalised_fluxes_final[
+                #     np.where((normalised_fluxes_final > 2.0) | (normalised_fluxes_final <= 0.00))[0]] = 0
 
                 # Turn data into a 4GP Spectrum object
                 metadata = self.metadata_store[i]
@@ -371,7 +363,7 @@ class FourFS:
                 metadata['continuum_normalised'] = 1
                 spectrum_continuum_normalised = Spectrum(wavelengths=wavelengths_final,
                                                          values=normalised_fluxes_final,
-                                                         value_errors=uncertainty_fluxes_final,
+                                                         value_errors=normalised_fluxes_final / snr_final,
                                                          metadata=metadata.copy())
 
                 output[i][snr] = {

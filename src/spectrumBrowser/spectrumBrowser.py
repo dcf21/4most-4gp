@@ -2,10 +2,14 @@
 # -*- coding: utf-8 -*-
 
 from os import path as os_path
-from flask import Flask, render_template, url_for, request
+from flask import Flask, render_template, url_for, request, make_response
 import argparse
 import glob
 import json
+import StringIO
+
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 from fourgp_speclib import SpectrumLibrarySqlite
 
@@ -111,10 +115,22 @@ def library_search(library):
 
 
 # Search a particular spectrum
-@app.route("/spectrum/<library>/<spec_id>")
+@app.route("/spectrum/<library>/<spec_id>", methods=("GET", "POST"))
 def spectrum_view(library, spec_id):
+    lambda_min = 3600
+    lambda_max = 9600
+    try:
+        lambda_min = float(request.form.get("lambda_min"))
+    except (TypeError, ValueError):
+        pass
+    try:
+        lambda_max = float(request.form.get("lambda_max"))
+    except (TypeError, ValueError):
+        pass
     parent_url = url_for("library_search", library=library)
+    self_url = url_for("spectrum_view", library=library, spec_id=spec_id)
     data_url = url_for("spectrum_json", library=library, spec_id=spec_id)
+    png_url = url_for("spectrum_png", library=library, spec_id=spec_id, lambda_min=lambda_min, lambda_max=lambda_max)
     path = os_path.join(args.path, library)
     x = SpectrumLibrarySqlite(path=path)
     metadata_keys = x._metadata_fields
@@ -122,7 +138,8 @@ def spectrum_view(library, spec_id):
     metadata = x.get_metadata(ids=int(spec_id))[0]
     metadata["spectrum_id"] = spec_id
     return render_template('spectrum.html', path=args.path, library=library, metadata_keys=metadata_keys,
-                           parent_url=parent_url, metadata=metadata, data_url=data_url)
+                           parent_url=parent_url, metadata=metadata, data_url=data_url, png_url=png_url,
+                           self_url=self_url, lambda_min=lambda_min, lambda_max=lambda_max)
 
 
 # Output a particular spectrum as a JSON file
@@ -133,6 +150,28 @@ def spectrum_json(library, spec_id):
     spectrum = x.open(ids=int(spec_id)).extract_item(0)
     data = zip(spectrum.wavelengths, spectrum.values)
     return json.dumps(data)
+
+
+# Output a particular spectrum as a png file
+@app.route("/spectrum_png/<library>/<spec_id>/<lambda_min>/<lambda_max>")
+def spectrum_png(library, spec_id, lambda_min, lambda_max):
+    path = os_path.join(args.path, library)
+    x = SpectrumLibrarySqlite(path=path)
+    spectrum = x.open(ids=int(spec_id)).extract_item(0)
+
+    fig = Figure(figsize=(16, 6))
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('Wavelength / A')
+    ax.set_ylabel('Value')
+    ax.set_xlim([float(lambda_min), float(lambda_max)])
+    ax.grid(True)
+    ax.plot(spectrum.wavelengths, spectrum.values)
+    canvas = FigureCanvas(fig)
+    png_output = StringIO.StringIO()
+    canvas.print_png(png_output)
+    response = make_response(png_output.getvalue())
+    response.headers['Content-Type'] = 'image/png'
+    return response
 
 
 if __name__ == "__main__":
