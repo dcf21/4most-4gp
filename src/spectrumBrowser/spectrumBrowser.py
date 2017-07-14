@@ -25,9 +25,11 @@ args = parser.parse_args()
 # Index of all the libraries in this workspace
 @app.route("/")
 def library_index():
+    # Fetch a list of all sub-directories inside this workspace -- each directory is a SpectrumLibrary
     libraries = glob.glob(os_path.join(args.path, "*"))
     libraries.sort()
 
+    # For each library, look up how many spectra are inside it, and create a dictionary of properties
     library_info = []
     for item in libraries:
         name = os_path.split(item)[1]
@@ -39,27 +41,69 @@ def library_index():
         })
         x.close()
         del x
+
+    # Render list of SpectrumLibraries into HTML
     return render_template('index.html', path=args.path, libraries=library_info)
 
 
 # Search a particular spectrum library
-@app.route("/library/<library>")
+@app.route("/library/<library>", methods=("GET", "POST"))
 def library_search(library):
     self_url = url_for("library_search", library=library)
     path = os_path.join(args.path, library)
     x = SpectrumLibrarySqlite(path=path)
-    metadata_keys = x._metadata_fields
+    metadata_keys = [str(i) for i in x._metadata_fields]
     metadata_keys.sort()
-    search = {"minima": {}, "maxima": {}}
-    constraints = {}
+
+    # Fetch search constraints from POST data
+    search = {"minima": {}, "maxima": {}}  # This structure contains strings which we put into the search form
+    constraints = {}  # This structure contains the float / string constraints which we pass to the SpectrumLibrary
+    # Loop over each of the metadata items we can be constrained on
     for item in metadata_keys:
-        search['minima'][item] = ""
-        search['maxima'][item] = ""
+        lower_limit = str(request.form.get("min_{}".format(item), ""))
+        upper_limit = str(request.form.get("max_{}".format(item), ""))
+        search['minima'][item] = lower_limit
+        search['maxima'][item] = upper_limit
+        # We only have a constraint on this metadata item if we have POST data which is not blank
+        have_constraint = (lower_limit != "") or (upper_limit != "")
+
+        # If we do have a constraint, test whether it's a string constraint, or a numeric constraint
+        if have_constraint:
+            lower_limit_float = 0
+            upper_limit_float = 1e9
+            # Test whether we get an exception when we try converting constraint to floats
+            try:
+                if lower_limit != "":
+                    lower_limit_float = float(lower_limit)
+                if upper_limit != "":
+                    upper_limit_float = float(upper_limit)
+                string_constraint = False
+            except ValueError:
+                string_constraint = True
+
+            # Create a new numeric metadata constraint
+            if not string_constraint:
+                constraints[item] = ((lower_limit_float, upper_limit_float) if lower_limit_float != upper_limit_float
+                                     else lower_limit_float)
+
+            # Create a new string metadata constraint
+            else:
+                if lower_limit is None:
+                    lower_limit = ""
+                if upper_limit is None or upper_limit == "":
+                    upper_limit = "zzzzzzzzz"
+                constraints[item] = (lower_limit, upper_limit) if lower_limit != upper_limit else lower_limit
+
+    # Search the SpectrumLibrary for matching spectra
     spectrum_ids = [i['specId'] for i in x.search(**constraints)]
     result_count = len(spectrum_ids)
+
+    # Show a maximum of 100 results
     if len(spectrum_ids) > 100:
         spectrum_ids = spectrum_ids[:100]
     results = x.get_metadata(ids=spectrum_ids)
+
+    # Add spectrum_id into each spectrum's metadata -- the HTML template needs this so we can link to spectrum viewer
     for i in range(len(spectrum_ids)):
         results[i]["spectrum_id"] = spectrum_ids[i]
     return render_template('library.html', path=args.path, library=library, metadata_keys=metadata_keys,
@@ -70,6 +114,7 @@ def library_search(library):
 @app.route("/spectrum/<library>/<spec_id>")
 def spectrum_view(library, spec_id):
     parent_url = url_for("library_search", library=library)
+    data_url = url_for("spectrum_json", library=library, spec_id=spec_id)
     path = os_path.join(args.path, library)
     x = SpectrumLibrarySqlite(path=path)
     metadata_keys = x._metadata_fields
@@ -77,7 +122,7 @@ def spectrum_view(library, spec_id):
     metadata = x.get_metadata(ids=int(spec_id))[0]
     metadata["spectrum_id"] = spec_id
     return render_template('spectrum.html', path=args.path, library=library, metadata_keys=metadata_keys,
-                           parent_url=parent_url, metadata=metadata )
+                           parent_url=parent_url, metadata=metadata, data_url=data_url)
 
 
 # Output a particular spectrum as a JSON file

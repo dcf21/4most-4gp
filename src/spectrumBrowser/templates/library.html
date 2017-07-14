@@ -1,9 +1,14 @@
+{% extends "page.html" %}
+{% block title %}Spectrum Library &lt;{{ library }}&gt;{% endblock %}
+{% block head %}
+{% endblock %}
+{% block content %}
 <h1>{{ library }}</h1>
 
-<p>Search for spectra...</p>
+<h4>Search for spectra</h4>
 
 <form method="POST" action="{{ self_url }}">
-    <table>
+    <table class="library_search bordered bordered_slim stripy">
         <thead>
         <tr>
             <td>Metadata field</td>
@@ -18,49 +23,60 @@
                 {{ item }}
             </td>
             <td>
-                <input type="text" name="{{ item }}" value="{{ search.minima.item }}"/>
+                <input type="text" name="min_{{ item }}" value="{{ search['minima'][item] }}"/>
             </td>
             <td>
-                <input type="text" name="{{ item }}" value="{{ search.maxima.item }}"/>
+                <input type="text" name="max_{{ item }}" value="{{ search['maxima'][item] }}"/>
             </td>
         </tr>
         {% endfor %}
         </tbody>
     </table>
 
-    <input class="btn btn-sm btn-primary" type="submit" value="Search..."/>
+    <input class="btn btn-sm btn-primary" style="margin:20px 0;" type="submit" value="Search..."/>
 
 </form>
 
 <hr/>
 
-<p>Found {{ result_count }} results...</p>
+<div class="alert alert-info" role="alert">
+    Found {{ result_count }} results
+</div>
 
-<table>
-    <thead>
-    <tr>
-        {% for item in metadata_keys %}
-        <td>
-            {{ item }}
-        </td>
-        {% endfor %}
-    </tr>
-    </thead>
-    <tbody>
-    {% for item in results %}
-    <tr>
-        {%for key in metadata_keys %}
-        <td>
-            {% if key=="Starname" %}
-            <a href='{{ url_for("spectrum_view", library=library, spec_id=item["spectrum_id"]) }}'>
-                {{ item[key] }}
-            </a>
-            {% else %}
-            {{ item[key] }}
-            {% endif %}
-        </td>
-        {% endfor %}
-    </tr>
-    {% endfor %}
-    </tbody>
-</table>
+<div class="scrolltable" style="font-size: 13px;">
+    <div class="scrolltable_thead">
+        <table class="stripy bordered" style="margin-top:15px;white-space:nowrap;">
+            <thead>
+            <tr>
+                {% for item in metadata_keys %}
+                <td>
+                    {{ item }}
+                </td>
+                {% endfor %}
+            </tr>
+            </thead>
+        </table>
+    </div>
+    <div class="scrolltable_tbody">
+        <table class="stripy bordered bordered_slim">
+            <tbody>
+            {% for item in results %}
+            <tr>
+                {%for key in metadata_keys %}
+                <td>
+                    {% if key=="Starname" %}
+                    <a href='{{ url_for("spectrum_view", library=library, spec_id=item["spectrum_id"]) }}'>
+                        {{ item[key] }}
+                    </a>
+                    {% else %}
+                    {{ item[key] }}
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

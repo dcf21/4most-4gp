@@ -1,26 +1,34 @@
-<h1>{{ library }}</h1>
+{% extends "page.html" %}
+{% block title %}Spectrum from &lt;{{ library }}&gt;{% endblock %}
+{% block head %}
+{% endblock %}
+{% block content %}
+<h1>Spectrum from {{ library }}</h1>
 
-    <table>
-        <thead>
-        <tr>
-            <td>Metadata field</td>
-            <td>Value</td>
-        </tr>
-        </thead>
-        <tbody>
-        {% for item in metadata_keys %}
-        <tr>
-            <td>
-                {{ item }}
-            </td>
-            <td>
-                {{ metadata[item] }}
-            </td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-
+<table class="library_metadata bordered bordered_slim stripy">
+    <thead>
+    <tr>
+        <td>Metadata field</td>
+        <td>Value</td>
+    </tr>
+    </thead>
+    <tbody>
+    {% for item in metadata_keys %}
+    <tr>
+        <td>
+            {{ item }}
+        </td>
+        <td>
+            {{ metadata[item] }}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
 
 <hr/>
 
+<div class="show_spectrum" data-source="{{data_url}}">
+    <canvas width="0" height="0"></canvas>
+</div>
+{% endblock %}

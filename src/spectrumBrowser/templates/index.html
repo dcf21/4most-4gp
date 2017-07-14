@@ -1,10 +1,15 @@
+{% extends "page.html" %}
+{% block title %}Index of Spectrum Libraries{% endblock %}
+{% block head %}
+{% endblock %}
+{% block content %}
 <h1>Index of Spectrum Libraries</h1>
 
-<p>
-    Path: {{ path }}
-</p>
+<div class="alert alert-info" role="alert">
+    Showing spectrum libraries in the path<br/><kbd>{{ path }}</kbd>
+</div>
 
-<table>
+<table class="library_list bordered bordered_slim stripy">
     <thead>
     <tr>
         <td>Name</td>
@@ -35,3 +40,4 @@
     {% endfor %}
     </tbody>
 </table>
+{% endblock %}
