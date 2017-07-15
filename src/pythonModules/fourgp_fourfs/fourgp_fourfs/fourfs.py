@@ -127,11 +127,12 @@ class FourFS:
 
         if not continuum_only:
             # Apply some normalisation to input flux levels
-            hdu_1 = fits.PrimaryHDU(flux * 10E-15 / max(flux))
+            data = flux * 10E-15 / max(flux)
         else:
             # If we only want continuum, without lines, then divide by continuum_normalised flux
-            hdu_1 = fits.PrimaryHDU((flux * 10E-15 / max(flux)) / continuum_normalised_flux)
+            data = (flux * 10E-15 / max(flux)) / continuum_normalised_flux
 
+        hdu_1 = fits.PrimaryHDU(data)
         hdu_1.header['CRTYPE1'] = "LINEAR  "
         hdu_1.header['CRPIX1'] = 1.0
         hdu_1.header['CRVAL1'] = lambda_min
@@ -145,6 +146,7 @@ class FourFS:
 
         hdu_list = fits.HDUList([hdu_1])
         hdu_list.writeto(os_path.join(self.tmp_dir, output_filename))
+        # np.savetxt(os_path.join(self.tmp_dir, output_filename+".txt"), np.asarray(data))
 
     def generate_4fs_template_list(self,
                                    spectra_list,
@@ -210,7 +212,7 @@ class FourFS:
                     '0.0', '0.0', '15.0', '15.0')
             writestr += 'template_{}_c {} {} {} {} {} {}\n'.format(
                 self.template_counter,
-                os_path.join(self.tmp_dir, 'template_{}.fits'.format(self.template_counter)),
+                os_path.join(self.tmp_dir, 'template_{}_c.fits'.format(self.template_counter)),
                 'goodSNR250', '0.0', '0.0', '15.0', '15.0')
 
             for snr in self.snr_list:
@@ -344,12 +346,11 @@ class FourFS:
 
                 # Do continuum normalisation
                 normalised_fluxes_final = fluxes_final / fluxes_final_c
-                normalised_fluxes_final = np.array(list(fluxes_1c) + list(fluxes_2c) + list(fluxes_3c))
 
                 # Remove bad pixels
                 # Any pixels where flux > 2 or flux < 0 get reset to zero for other downstream codes
-                # normalised_fluxes_final[
-                #     np.where((normalised_fluxes_final > 2.0) | (normalised_fluxes_final <= 0.00))[0]] = 0
+                normalised_fluxes_final[
+                    np.where((normalised_fluxes_final > 2.0) | (normalised_fluxes_final <= 0.00))[0]] = 0
 
                 # Turn data into a 4GP Spectrum object
                 metadata = self.metadata_store[i]

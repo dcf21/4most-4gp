@@ -23,6 +23,7 @@ table.bordered td { border-left: 1px solid #888888; border-right: 1px solid #888
 table.bordered_slim td { padding: 2px 6px; }
 
 .library_search { font-size: 13px; }
+.spectrum_metadata { font-size: 13px; }
 
 div.scrolltable { overflow-x: scroll; }
 div.scrolltable_thead { background-color: #ffffff; }
