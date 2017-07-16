@@ -5,7 +5,7 @@ import logging
 from numpy import RankWarning
 from warnings import simplefilter
 
-from .rv_instance import RvInstance
+from .rv_instance import RvInstance, random_radial_velocity
 
 __version__ = "0.1.0"
 

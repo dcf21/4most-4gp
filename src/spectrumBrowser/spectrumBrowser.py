@@ -133,7 +133,7 @@ def spectrum_view(library, spec_id):
     png_url = url_for("spectrum_png", library=library, spec_id=spec_id, lambda_min=lambda_min, lambda_max=lambda_max)
     path = os_path.join(args.path, library)
     x = SpectrumLibrarySqlite(path=path)
-    metadata_keys = x._metadata_fields
+    metadata_keys = x.list_metadata_fields()
     metadata_keys.sort()
     metadata = x.get_metadata(ids=int(spec_id))[0]
     metadata["spectrum_id"] = spec_id

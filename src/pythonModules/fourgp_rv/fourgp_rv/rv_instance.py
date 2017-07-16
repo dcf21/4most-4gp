@@ -8,6 +8,7 @@ import logging
 import itertools
 import emcee
 from emcee.interruptible_pool import InterruptiblePool
+import random
 
 import fourgp_speclib
 import fourgp_degrade
@@ -158,7 +159,7 @@ class RvInstance(object):
             # Find the spectrum which most closely matches the requested value of this stellar parameter.
             axis_position = int(round(axis_values[axis[0]] - axis[1]) / axis[3])
             # Clip to the limits of ths axis
-            axis_position = min(max(axis_position, 0), axis_length-1)
+            axis_position = min(max(axis_position, 0), axis_length - 1)
             # Multiply-and-accumulate the index of the spectrum we want
             template_number += axis_position
         return template_library.extract_item(template_number)
@@ -358,3 +359,21 @@ class RvInstance(object):
             output[par] = max_prob[i]
 
         return output
+
+
+def random_radial_velocity():
+    """
+    Pick a random radial velocity in km/s, following the approximate probability distribution expected for 4MOST
+    galactic stars.
+
+    :return:
+        Radial velocity in km/s
+    """
+
+    distribution_selector = random.uniform(a=0, b=100)
+
+    if distribution_selector < 10:
+        # Pick 10% of stars from a uniform distribution from -200 to 200
+        return random.uniform(a=-200, b=200)  # Unit km/s
+    else:
+        return random.gauss(mu=0, sigma=25)
