@@ -7,6 +7,7 @@ import argparse
 import glob
 import json
 import StringIO
+import numpy as np
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -151,6 +152,18 @@ def spectrum_json(library, spec_id):
     data = zip(spectrum.wavelengths, spectrum.values)
     return json.dumps(data)
 
+# Output a particular spectrum as a JSON file
+@app.route("/spectrum_txt/<library>/<spec_id>")
+def spectrum_txt(library, spec_id):
+    path = os_path.join(args.path, library)
+    x = SpectrumLibrarySqlite(path=path)
+    spectrum = x.open(ids=int(spec_id)).extract_item(0)
+    data = np.asarray(zip(spectrum.wavelengths, spectrum.values, spectrum.value_errors))
+    txt_output = StringIO.StringIO()
+    np.savetxt(txt_output, data)
+    response = make_response(txt_output.getvalue())
+    response.headers['Content-Type'] = 'text/plain'
+    return response
 
 # Output a particular spectrum as a png file
 @app.route("/spectrum_png/<library>/<spec_id>/<lambda_min>/<lambda_max>")
