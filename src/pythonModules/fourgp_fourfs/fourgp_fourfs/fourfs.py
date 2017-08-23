@@ -21,7 +21,10 @@ logger = logging.getLogger(__name__)
 class FourFS:
     def __init__(self,
                  path_to_4fs="/home/dcf21/iwg7_pipeline/OpSys/ETC",
-                 snr_list=None
+                 snr_list=None,
+                 snr_definitions=None,
+                 lrs_use_snr_definitions=None,
+                 hrs_use_snr_definitions=None
                  ):
         """
         Instantiate a class for calling 4FS.
@@ -31,6 +34,16 @@ class FourFS:
 
         :param snr_list:
             List of the SNRs that we want 4FS to degrade input spectra to.
+
+        :param snr_definitions:
+            List of ways we define SNR. Each should take the form of a tuple (name,min,max), where we take the median
+            SNR per pixel between the specified minimum and maximum wavelengths in Angstrom.
+
+        :param lrs_use_snr_definitions:
+            List of three SNR definitions to use for the red, green and blue bands of 4MOST LRS.
+
+        :param hrs_use_snr_definitions:
+            List of three SNR definitions to use for the red, green and blue bands of 4MOST HRS.
         """
         self.path_to_4fs = path_to_4fs
         self.template_counter = 0
@@ -39,6 +52,20 @@ class FourFS:
         if snr_list is None:
             snr_list = ("05", "10", "15", "20", "50", "100", "250")
         self.snr_list = snr_list
+
+        if snr_definitions is None:
+            snr_definitions = [("MEDIANSNR", 6180, 6680)]
+
+        if lrs_use_snr_definitions is None:
+            lrs_use_snr_definitions = ("MEDIANSNR", "MEDIANSNR", "MEDIANSNR")
+
+        if hrs_use_snr_definitions is None:
+            hrs_use_snr_definitions = ("MEDIANSNR", "MEDIANSNR", "MEDIANSNR")
+
+        self.lrs_use_snr_definitions = lrs_use_snr_definitions
+        self.hrs_use_snr_definitions = hrs_use_snr_definitions
+        self.distinct_snr_definitions = set([i for i in (lrs_use_snr_definitions + hrs_use_snr_definitions)
+                                             if isinstance(i, basestring)])
 
         # Create temporary directory
         self.id_string = "4fs_{:d}".format(os.getpid())
@@ -54,9 +81,13 @@ class FourFS:
 
         with open(os_path.join(self.tmp_dir, "rulelist.txt"), "w") as f:
             f.write(config_files.rulelist)
+            for snr_definition in snr_definitions:
+                f.write("{:<13s} SNR MEDIAN DIV   1.0  {:.1f} {:.1f} NM     1.0    PIX\n".format(snr_definition[0],
+                                                                                                 snr_definition[1]/10.,
+                                                                                                 snr_definition[2]/10.))
 
         with open(os_path.join(self.tmp_dir, "ruleset.txt"), "w") as f:
-            f.write(config_files.ruleset(snr_list=self.snr_list))
+            f.write(config_files.ruleset(snr_list=self.snr_list, snr_definitions=self.distinct_snr_definitions))
 
         # Extract 4MOST telescope description files
         cwd = os.getcwd()
@@ -203,18 +234,23 @@ class FourFS:
                                              resolution=(resolution is not None),
                                              continuum_only=True)
 
-            for snr in self.snr_list:
-                writestr += 'template_{}_SNR{} {} {} {} {} {} {}\n'.format(
-                    self.template_counter,
-                    snr,
-                    os_path.join(self.tmp_dir, 'template_{}.fits'.format(self.template_counter)),
-                    'goodSNR{}'.format(snr),
-                    '0.0', '0.0', '15.0', '15.0')
+            # Run 4FS using all SNR definitions and all SNR values on this spectrum
+            for snr_definition in self.distinct_snr_definitions:
+                for snr in self.snr_list:
+                    writestr += 'template_{}_SNR{:3s}_{} {} {} {} {} {} {}\n'.format(
+                        self.template_counter,
+                        snr, snr_definition,
+                        os_path.join(self.tmp_dir, 'template_{}.fits'.format(self.template_counter)),
+                        'goodSNR{0:3s}_{1:s}'.format(snr, snr_definition),
+                        '0.0', '0.0', '15.0', '15.0')
+
+            # Additionally, run 4FS on a continuum-only spectrum at a high SNR of 250
             writestr += 'template_{}_c {} {} {} {} {} {}\n'.format(
                 self.template_counter,
                 os_path.join(self.tmp_dir, 'template_{}_c.fits'.format(self.template_counter)),
-                'goodSNR250', '0.0', '0.0', '15.0', '15.0')
+                'goodSNR2500', '0.0', '0.0', '15.0', '15.0')
 
+            # Populate star_list with the list of FITS files we're expecting 4FS to produce
             for snr in self.snr_list:
                 star_list.append('template_{}_SNR{}'.format(self.template_counter, snr))
             star_list.append('template_{}_c'.format(self.template_counter))
@@ -272,77 +308,77 @@ class FourFS:
             A list of 4GP Spectrum objects.
         """
 
+        bands = ("blue", "green", "red")
+
+        if setup=="LRS":
+            snr_definitions = self.lrs_use_snr_definitions
+        else:
+            snr_definitions = self.hrs_use_snr_definitions
+
+        # SNR definitions are red, green, blue. But we index the bands (blue, green, red).
+        snr_definitions = snr_definitions[::-1]
+
         output = {}
         for i in template_numbers:
             output[i] = {}
             for snr in self.snr_list:
-                setup_full = "SNR{}_{}".format(snr, setup)
                 # Load in the three output spectra -- blue, green, red arms
-                d1 = fits.open(os_path.join(path, 'specout_template_template_{}_{}_blue.fits'.format(i, setup_full)))
-                d2 = fits.open(os_path.join(path, 'specout_template_template_{}_{}_green.fits'.format(i, setup_full)))
-                d3 = fits.open(os_path.join(path, 'specout_template_template_{}_{}_red.fits'.format(i, setup_full)))
+                d = []
+                for j, band in enumerate(bands):
+                    snr_definition = snr_definitions[j]
+                    if snr_definition is not None:
+                        fits_data = fits.open(os_path.join(path, 'specout_template_template_{}_SNR{:3s}_{}_{}_{}.fits'.
+                                                                 format(i, snr, snr_definitions[j], setup, band)))
+                        data = fits_data[2].data
+                    else:
+                        data = {'LAMBDA':np.array(0), 'REALISATION':np.array(0), 'SKY':np.array(0)}
+                    d.append(data)
 
                 # Read the data from the FITS files
-                wavelengths_1 = d1[2].data['LAMBDA']
-                wavelengths_2 = d2[2].data['LAMBDA']
-                wavelengths_3 = d3[2].data['LAMBDA']
-                fluxes_1 = d1[2].data['REALISATION'] - d1[2].data['SKY']
-                fluxes_2 = d2[2].data['REALISATION'] - d2[2].data['SKY']
-                fluxes_3 = d3[2].data['REALISATION'] - d3[2].data['SKY']
-                snr_1 = d1[2].data['SNR']
-                snr_2 = d2[2].data['SNR']
-                snr_3 = d3[2].data['SNR']
+                wavelengths = [item['LAMBDA'] for item in data]
+                fluxes = [(item['REALISATION'] - item['SKY']) for item in data]
+                snr = [item['SNR'] for item in data]
 
+                # In 4MOST LRS mode, the wavelengths bands overlap, so we cut off the ends of the bands
+                # Stitch arms based on where SNR is best -- hardcoded here may need changed in future versions
                 if setup == 'LRS':
-                    # Stitch arms based on where SNR is best -- hardcoded here may need changed in future versions
-                    indices_1 = np.where(wavelengths_1 <= 5327.7)[0]
-                    indices_2 = np.where((wavelengths_2 > 5327.7) & (wavelengths_2 <= 7031.7))[0]
-                    indices_3 = np.where(wavelengths_3 > 7031.7)[0]
-                    wavelengths_1 = wavelengths_1[indices_1]
-                    wavelengths_2 = wavelengths_2[indices_2]
-                    wavelengths_3 = wavelengths_3[indices_3]
-                    fluxes_1 = fluxes_1[indices_1]
-                    fluxes_2 = fluxes_2[indices_2]
-                    fluxes_3 = fluxes_3[indices_3]
-                    snr_1 = snr_1[indices_1]
-                    snr_2 = snr_2[indices_2]
-                    snr_3 = snr_3[indices_3]
+                    indices = (
+                        np.where(wavelengths[0] <= 5327.7)[0],
+                        np.where((wavelengths[1] > 5327.7) & (wavelengths[1] <= 7031.7))[0],
+                        np.where(wavelengths[2] > 7031.7)[0]
+                    )
+                    wavelengths = [item[indices[j]] for j,item in enumerate(wavelengths)]
+                    fluxes = [item[indices[j]] for j,item in enumerate(fluxes)]
+                    snr = [item[indices[j]] for j,item in enumerate(snr)]
 
-                wavelengths_final = np.array(list(wavelengths_1) + list(wavelengths_2) + list(wavelengths_3))
-                fluxes_final = np.array(list(fluxes_1) + list(fluxes_2) + list(fluxes_3))
-                snr_final = np.array(list(snr_1) + list(snr_2) + list(snr_3))
+                wavelengths_final = np.array(sum([list(item) for item in wavelengths]))
+                fluxes_final = np.array(sum([list(item) for item in fluxes]))
+                snr_final = np.array(sum([list(item) for item in snr]))
 
                 # Load continuum spectra
-                d1c = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_blue.fits'.format(i, setup)))
-                d2c = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_green.fits'.format(i, setup)))
-                d3c = fits.open(os_path.join(path, 'specout_template_template_{}_c_{}_red.fits'.format(i, setup)))
+                d_c = [fits.open(
+                    os_path.join(path, 'specout_template_template_{}_c_{}_{}.fits'.format(i, setup, band))
+                )[2].data
+                       for band in bands]
 
                 # Read the data from the FITS files
-                wavelengths_1c = d1c[2].data['LAMBDA']
-                wavelengths_2c = d2c[2].data['LAMBDA']
-                wavelengths_3c = d3c[2].data['LAMBDA']
-                fluxes_1c = d1c[2].data['REALISATION'] - d1c[2].data['SKY']
-                fluxes_2c = d2c[2].data['REALISATION'] - d2c[2].data['SKY']
-                fluxes_3c = d3c[2].data['REALISATION'] - d3c[2].data['SKY']
+                wavelengths_c = [item['LAMBDA'] for item in d_c]
+                fluxes_c = [(item['REALISATION'] - item['SKY']) for item in d_c]
 
                 if setup == 'LRS':
-                    indices_1 = np.where(wavelengths_1c <= 5327.7)[0]
-                    indices_2 = np.where((wavelengths_2c > 5327.7) & (wavelengths_2c <= 7031.7))[0]
-                    indices_3 = np.where(wavelengths_3c > 7031.7)[0]
-                    wavelengths_1c = wavelengths_1c[indices_1]
-                    wavelengths_2c = wavelengths_2c[indices_2]
-                    wavelengths_3c = wavelengths_3c[indices_3]
-                    fluxes_1c = fluxes_1c[indices_1]
-                    fluxes_2c = fluxes_2c[indices_2]
-                    fluxes_3c = fluxes_3c[indices_3]
+                    indices = (
+                        np.where(wavelengths_c[0] <= 5327.7)[0],
+                        np.where((wavelengths_c[1] > 5327.7) & (wavelengths_c[1] <= 7031.7))[0],
+                        np.where(wavelengths_c[2] > 7031.7)[0]
+                    )
+                    wavelengths_c = [item[indices[j]] for j,item in enumerate(wavelengths_c)]
+                    fluxes_c = [item[indices[j]] for j,item in enumerate(fluxes_c)]
 
                 # Combine everything into one set of arrays to be saved
-                wavelengths_final_c = np.array(list(wavelengths_1c) + list(wavelengths_2c) + list(wavelengths_3c))
+                wavelengths_final_c = np.array(sum([list(item) for item in wavelengths_c]))
 
-                fluxes_final_c = np.array(
-                    list(fluxes_1c * max(fluxes_1) / max(fluxes_1c)) +
-                    list(fluxes_2c * max(fluxes_2) / max(fluxes_2c)) +
-                    list(fluxes_3c * max(fluxes_3) / max(fluxes_3c)))
+                fluxes_final_c = np.array(sum([list(fluxes_c * max(fluxes) / max(fluxes_c))
+                                               for f, fc in zip(fluxes, fluxes_c)]))
 
                 # Do continuum normalisation
                 normalised_fluxes_final = fluxes_final / fluxes_final_c
