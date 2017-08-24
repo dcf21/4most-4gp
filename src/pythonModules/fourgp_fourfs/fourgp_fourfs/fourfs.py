@@ -50,7 +50,7 @@ class FourFS:
         self.metadata_store = {}
 
         if snr_list is None:
-            snr_list = ("05", "10", "15", "20", "50", "100", "250")
+            snr_list = (5, 10, 15, 20, 50, 100, 250)
         self.snr_list = snr_list
 
         if snr_definitions is None:
@@ -64,8 +64,12 @@ class FourFS:
 
         self.lrs_use_snr_definitions = lrs_use_snr_definitions
         self.hrs_use_snr_definitions = hrs_use_snr_definitions
+
+        assert len(lrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST RGB bands."
+        assert len(hrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST RGB bands."
+
         self.distinct_snr_definitions = set([i for i in (lrs_use_snr_definitions + hrs_use_snr_definitions)
-                                             if isinstance(i, basestring)])
+                                             if isinstance(i, basestring) and len(i) > 0])
 
         # Create temporary directory
         self.id_string = "4fs_{:d}".format(os.getpid())
@@ -82,9 +86,8 @@ class FourFS:
         with open(os_path.join(self.tmp_dir, "rulelist.txt"), "w") as f:
             f.write(config_files.rulelist)
             for snr_definition in snr_definitions:
-                f.write("{:<13s} SNR MEDIAN DIV   1.0  {:.1f} {:.1f} NM     1.0    PIX\n".format(snr_definition[0],
-                                                                                                 snr_definition[1]/10.,
-                                                                                                 snr_definition[2]/10.))
+                f.write("{:<13s} SNR MEDIAN DIV   1.0  {:.1f} {:.1f} NM     1.0    PIX\n".
+                        format(snr_definition[0], snr_definition[1] / 10., snr_definition[2] / 10.))
 
         with open(os_path.join(self.tmp_dir, "ruleset.txt"), "w") as f:
             f.write(config_files.ruleset(snr_list=self.snr_list, snr_definitions=self.distinct_snr_definitions))
@@ -237,11 +240,11 @@ class FourFS:
             # Run 4FS using all SNR definitions and all SNR values on this spectrum
             for snr_definition in self.distinct_snr_definitions:
                 for snr in self.snr_list:
-                    writestr += 'template_{}_SNR{:3s}_{} {} {} {} {} {} {}\n'.format(
+                    writestr += 'template_{}_SNR{:.1f}_{} {} {} {} {} {} {}\n'.format(
                         self.template_counter,
                         snr, snr_definition,
                         os_path.join(self.tmp_dir, 'template_{}.fits'.format(self.template_counter)),
-                        'goodSNR{0:3s}_{1:s}'.format(snr, snr_definition),
+                        'goodSNR{0:.1f}_{1:s}'.format(snr, snr_definition),
                         '0.0', '0.0', '15.0', '15.0')
 
             # Additionally, run 4FS on a continuum-only spectrum at a high SNR of 250
@@ -252,7 +255,7 @@ class FourFS:
 
             # Populate star_list with the list of FITS files we're expecting 4FS to produce
             for snr in self.snr_list:
-                star_list.append('template_{}_SNR{}'.format(self.template_counter, snr))
+                star_list.append('template_{}_SNR{:.1f}'.format(self.template_counter, snr))
             star_list.append('template_{}_c'.format(self.template_counter))
 
             # Increment template counter
@@ -310,7 +313,7 @@ class FourFS:
 
         bands = ("blue", "green", "red")
 
-        if setup=="LRS":
+        if setup == "LRS":
             snr_definitions = self.lrs_use_snr_definitions
         else:
             snr_definitions = self.hrs_use_snr_definitions
@@ -326,18 +329,18 @@ class FourFS:
                 d = []
                 for j, band in enumerate(bands):
                     snr_definition = snr_definitions[j]
-                    if snr_definition is not None:
-                        fits_data = fits.open(os_path.join(path, 'specout_template_template_{}_SNR{:3s}_{}_{}_{}.fits'.
-                                                                 format(i, snr, snr_definitions[j], setup, band)))
+                    if (snr_definition is not None) and (len(snr_definition) > 0):
+                        fits_data = fits.open(os_path.join(path, 'specout_template_template_{}_SNR{:.1f}_{}_{}_{}.fits'.
+                                                           format(i, snr, snr_definitions[j], setup, band)))
                         data = fits_data[2].data
                     else:
-                        data = {'LAMBDA':np.array(0), 'REALISATION':np.array(0), 'SKY':np.array(0)}
+                        data = {'LAMBDA': np.array(0), 'REALISATION': np.array(0), 'SKY': np.array(0)}
                     d.append(data)
 
                 # Read the data from the FITS files
-                wavelengths = [item['LAMBDA'] for item in data]
-                fluxes = [(item['REALISATION'] - item['SKY']) for item in data]
-                snr = [item['SNR'] for item in data]
+                wavelengths = [item['LAMBDA'] for item in d]
+                fluxes = [(item['REALISATION'] - item['SKY']) for item in d]
+                snrs = [item['SNR'] for item in d]
 
                 # In 4MOST LRS mode, the wavelengths bands overlap, so we cut off the ends of the bands
                 # Stitch arms based on where SNR is best -- hardcoded here may need changed in future versions
@@ -347,13 +350,13 @@ class FourFS:
                         np.where((wavelengths[1] > 5327.7) & (wavelengths[1] <= 7031.7))[0],
                         np.where(wavelengths[2] > 7031.7)[0]
                     )
-                    wavelengths = [item[indices[j]] for j,item in enumerate(wavelengths)]
-                    fluxes = [item[indices[j]] for j,item in enumerate(fluxes)]
-                    snr = [item[indices[j]] for j,item in enumerate(snr)]
+                    wavelengths = [item[indices[j]] for j, item in enumerate(wavelengths)]
+                    fluxes = [item[indices[j]] for j, item in enumerate(fluxes)]
+                    snrs = [item[indices[j]] for j, item in enumerate(snrs)]
 
-                wavelengths_final = np.array(sum([list(item) for item in wavelengths]))
-                fluxes_final = np.array(sum([list(item) for item in fluxes]))
-                snr_final = np.array(sum([list(item) for item in snr]))
+                wavelengths_final = np.array(sum([list(item) for item in wavelengths], []))
+                fluxes_final = np.array(sum([list(item) for item in fluxes], []))
+                snrs_final = np.array(sum([list(item) for item in snrs], []))
 
                 # Load continuum spectra
                 d_c = [fits.open(
@@ -371,14 +374,13 @@ class FourFS:
                         np.where((wavelengths_c[1] > 5327.7) & (wavelengths_c[1] <= 7031.7))[0],
                         np.where(wavelengths_c[2] > 7031.7)[0]
                     )
-                    wavelengths_c = [item[indices[j]] for j,item in enumerate(wavelengths_c)]
-                    fluxes_c = [item[indices[j]] for j,item in enumerate(fluxes_c)]
+                    wavelengths_c = [item[indices[j]] for j, item in enumerate(wavelengths_c)]
+                    fluxes_c = [item[indices[j]] for j, item in enumerate(fluxes_c)]
 
                 # Combine everything into one set of arrays to be saved
-                wavelengths_final_c = np.array(sum([list(item) for item in wavelengths_c]))
+                wavelengths_final_c = np.array(sum([list(item) for item in wavelengths_c], []))
 
-                fluxes_final_c = np.array(sum([list(fluxes_c * max(fluxes) / max(fluxes_c))
-                                               for f, fc in zip(fluxes, fluxes_c)]))
+                fluxes_final_c = np.array(sum([list(fc * max(f) / max(fc)) for f, fc in zip(fluxes, fluxes_c)], []))
 
                 # Do continuum normalisation
                 normalised_fluxes_final = fluxes_final / fluxes_final_c
@@ -394,13 +396,13 @@ class FourFS:
                 metadata['SNR'] = float(snr)
                 spectrum = Spectrum(wavelengths=wavelengths_final,
                                     values=fluxes_final,
-                                    value_errors=fluxes_final / snr_final,
+                                    value_errors=fluxes_final / snrs_final,
                                     metadata=metadata.copy())
 
                 metadata['continuum_normalised'] = 1
                 spectrum_continuum_normalised = Spectrum(wavelengths=wavelengths_final,
                                                          values=normalised_fluxes_final,
-                                                         value_errors=normalised_fluxes_final / snr_final,
+                                                         value_errors=normalised_fluxes_final / snrs_final,
                                                          metadata=metadata.copy())
 
                 output[i][snr] = {

@@ -226,6 +226,6 @@ goodSNR2500 2500.0         DCFSNR
 
     for snr_definition in snr_definitions:
         for snr in snr_list:
-            output += "goodSNR{0:3s}_{1:s} {2:13.1f} {1:s}\n".format(snr, snr_definition, float(snr))
+            output += "goodSNR{0:.1f}_{1:s} {2:13.1f} {1:s}\n".format(snr, snr_definition, snr)
 
     return output
