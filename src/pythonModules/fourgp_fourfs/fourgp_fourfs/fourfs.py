@@ -334,7 +334,12 @@ class FourFS:
                                                            format(i, snr, snr_definitions[j], setup, band)))
                         data = fits_data[2].data
                     else:
-                        data = {'LAMBDA': np.array(0), 'REALISATION': np.array(0), 'SKY': np.array(0)}
+                        data = {
+                            'LAMBDA': np.zeros(0),
+                            'REALISATION': np.zeros(0),
+                            'SKY': np.zeros(0),
+                            'SNR': np.zeros(0)
+                        }
                     d.append(data)
 
                 # Read the data from the FITS files
@@ -380,7 +385,8 @@ class FourFS:
                 # Combine everything into one set of arrays to be saved
                 wavelengths_final_c = np.array(sum([list(item) for item in wavelengths_c], []))
 
-                fluxes_final_c = np.array(sum([list(fc * max(f) / max(fc)) for f, fc in zip(fluxes, fluxes_c)], []))
+                fluxes_final_c = np.array(sum([list(fc * max(f) / max(fc))
+                                               for f, fc in zip(fluxes, fluxes_c) if len(f) > 0], []))
 
                 # Do continuum normalisation
                 normalised_fluxes_final = fluxes_final / fluxes_final_c
