@@ -508,7 +508,7 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN (%s);
 SELECT s.specId, s.filename, o.name AS origin
 FROM spectra s
 INNER JOIN origins o ON s.originId = o.originId
-WHERE {};""".format(" AND ".join(criteria))
+WHERE {} ORDER BY s.filename;""".format(" AND ".join(criteria))
         self._parameterised_query(query, criteria_params)
         return self._db_cursor.fetchall()
 
