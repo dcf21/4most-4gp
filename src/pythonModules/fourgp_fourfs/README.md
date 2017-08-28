@@ -15,6 +15,8 @@ cd OpSys
 make
 ```
 
+Note that the 4MOST GitLab account is password protected, so you will need to get your own account before you will be able to check out the code.
+
 # Contact details
 This code is maintained by:
 
