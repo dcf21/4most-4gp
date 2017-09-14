@@ -4,6 +4,7 @@
 from os import path as os_path
 from math import sqrt
 import numpy as np
+import scipy.integrate
 import hashlib
 import logging
 
@@ -273,6 +274,16 @@ class Spectrum(object):
             output.copy_mask_from(self)
 
         return output
+
+    def integral(self):
+        """
+        Evaluate the integrated flux in a Spectrum
+
+        :return:
+            float
+        """
+
+        return scipy.integrate.trapz(x=self.wavelengths, y=self.values)
 
     def apply_redshift(self, z):
         """
