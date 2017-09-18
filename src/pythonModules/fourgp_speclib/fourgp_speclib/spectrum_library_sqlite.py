@@ -85,7 +85,7 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
         self._path_db = os_path.join(self._path, self._index_file_name)
 
         assert os_path.exists(self._path_db),\
-            "Attempting to open an SQLite database <{}> that doesn't exist.".format(db_path)
+            "Attempting to open an SQLite database <{}> that doesn't exist.".format(self._path_db)
 
         self._db = sqlite3.connect(self._path_db)
         self._db.row_factory = sqlite3.Row
