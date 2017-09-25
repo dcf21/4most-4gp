@@ -24,6 +24,17 @@ workspace = os_path.join(our_path, "../../../4most-4gp-scripts/workspace")
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--library-path', required=False, dest='path', default=workspace,
                     help="Path to the collection of spectrum libraries we want to browse.")
+parser.add_argument('--public',
+                    required=False,
+                    action='store_true',
+                    dest="public",
+                    help="Make this python/flask instance publicly visible on the network.")
+parser.add_argument('--private',
+                    required=False,
+                    action='store_false',
+                    dest="public",
+                    help="Make this python/flask instance only visible on localhost (default).")
+parser.set_defaults(public=False)
 args = parser.parse_args()
 
 
@@ -152,6 +163,7 @@ def spectrum_json(library, spec_id):
     data = zip(spectrum.wavelengths, spectrum.values)
     return json.dumps(data)
 
+
 # Output a particular spectrum as a JSON file
 @app.route("/spectrum_txt/<library>/<spec_id>")
 def spectrum_txt(library, spec_id):
@@ -164,6 +176,7 @@ def spectrum_txt(library, spec_id):
     response = make_response(txt_output.getvalue())
     response.headers['Content-Type'] = 'text/plain'
     return response
+
 
 # Output a particular spectrum as a png file
 @app.route("/spectrum_png/<library>/<spec_id>/<lambda_min>/<lambda_max>")
@@ -188,4 +201,4 @@ def spectrum_png(library, spec_id, lambda_min, lambda_max):
 
 
 if __name__ == "__main__":
-    app.run()
+    app.run(host="0.0.0.0" if args.public else "127.0.0.1")
