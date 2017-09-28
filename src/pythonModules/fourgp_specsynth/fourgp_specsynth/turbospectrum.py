@@ -456,10 +456,12 @@ class TurboSpectrum:
             stdout, stderr = p.communicate()
         except subprocess.CalledProcessError:
             return {
+                "interpol_config": interpol_config,
                 "errors": "MARCS model atmosphere interpolation failed."
             }
 
         return {
+            "interpol_config": interpol_config,
             "spherical": spherical,
             "errors": None
         }
@@ -586,6 +588,11 @@ class TurboSpectrum:
         # Generate configuation files to pass to babsma and bsyn
         babsma_in, bsyn_in = self.make_babsma_bysn_file(spherical=atmosphere_properties['spherical'])
 
+        # Start making dictionary of output data
+        output = atmosphere_properties
+        output["babsma_config"] = babsma_in
+        output["bsyn_config"] = bsyn_in
+
         # Select whether we want to see all the output that babsma and bsyn send to the terminal
         if self.verbose:
             stdout = None
@@ -607,7 +614,8 @@ class TurboSpectrum:
             pr1.stdin.write(babsma_in)
             stdout, stderr = pr1.communicate()
         except subprocess.CalledProcessError:
-            return {"errors": "babsma failed"}
+            output["errors"] = "babsma failed"
+            return output
         finally:
             os.chdir(cwd)
         logger.info("%s %s" % (pr1.returncode, stderr))
@@ -620,14 +628,14 @@ class TurboSpectrum:
             pr.stdin.write(bsyn_in)
             stdout, stderr = pr.communicate()
         except subprocess.CalledProcessError:
-            return {"errors": "bsyn failed"}
+            output["errors"] = "bsyn failed"
+            return output
         finally:
             os.chdir(cwd)
         logger.info("%s %s" % (pr.returncode, stderr))
 
         # Return output
-        return {
-            "return_code": pr.returncode,
-            "errors": None,
-            "output_file": os_path.join(self.tmp_dir, "spectrum_{:08d}.spec".format(self.counter_spectra))
-        }
+        output["return_code"] = pr.returncode
+        output["errors"] = None
+        output["output_file"] = os_path.join(self.tmp_dir, "spectrum_{:08d}.spec".format(self.counter_spectra))
+        return output
