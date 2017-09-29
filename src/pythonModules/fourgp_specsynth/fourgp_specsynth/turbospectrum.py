@@ -85,7 +85,7 @@ class TurboSpectrum:
         self.alpha = None
         self.s_process = 0
         self.r_process = 0
-        self.verbose = True
+        self.verbose = False
         self.line_list_files = None
 
         # Create temporary directory
@@ -179,7 +179,7 @@ class TurboSpectrum:
                   turbulent_velocity=None, free_abundances=None,
                   sphere=None, alpha=None, s_process=None, r_process=None,
                   line_list_paths=None, line_list_files=None,
-                  verbose=True):
+                  verbose=None):
         """
         Set the stellar parameters of the synthetic spectra to generate. This can be called as often as needed
         to generate many synthetic spectra with one class instance. All arguments are optional; any which are not

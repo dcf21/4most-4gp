@@ -10,11 +10,16 @@ from numpy import RankWarning
 from warnings import simplefilter
 
 from .spectrum_library_sqlite import SpectrumLibrarySqlite
-from .spectrum_library_mysql import SpectrumLibraryMySql
 from .spectrum_library import SpectrumLibrary
 from .spectrum_array import SpectrumArray
 from .spectrum import Spectrum
 from .spectrum_polynomial import SpectrumPolynomial
+
+# Allow MySQL binding to silently fail if system doesn't have MySQLdb package installed
+try:
+    from .spectrum_library_mysql import SpectrumLibraryMySql
+except ImportError:
+    pass
 
 __version__ = "0.1.0"
 
