@@ -18,12 +18,22 @@ class CannonInstance(object):
     loaded from 4GP SpectrumLibrary objects.
     """
 
-    def __init__(self, training_set, label_names, censors=None, progress_bar=False, threads=None):
+    def __init__(self, training_set, label_names, censors=None, progress_bar=False, threads=None, tolerance=1e-4):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
         
         :param training_set:
             A SpectrumArray containing the spectra to train the Cannon on.
+
+        :param label_names:
+            A list of the names of the labels the Cannon is to estimate. We require that all of the training spectra
+            have metadata fields defining all of these labels.
+
+        :param threads:
+            The number of CPU cores we should use. If None, we look up how many cores this computer has.
+
+        :param tolerance:
+            The tolerance xtol which the method <scipy.optimize.fmin_powell> uses to determine convergence.
         """
 
         assert isinstance(training_set, fourgp_speclib.SpectrumArray), \
@@ -74,7 +84,11 @@ class CannonInstance(object):
         self._model.regularization = 0
 
         logger.info("Starting to train the Cannon")
-        self._model.train(progressbar=self._progress_bar)
+        self._model.train(
+            progressbar=self._progress_bar,
+            op_kwargs={'xtol': tolerance, 'ftol': tolerance},
+            op_bfgs_kwargs={'xtol': tolerance, 'ftol': tolerance}
+        )
         logger.info("Cannon training completed")
         self._model._set_s2_by_hogg_heuristic()
 
