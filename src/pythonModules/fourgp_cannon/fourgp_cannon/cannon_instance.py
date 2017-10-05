@@ -87,7 +87,7 @@ class CannonInstance(object):
         self._model.train(
             progressbar=self._progress_bar,
             op_kwargs={'xtol': tolerance, 'ftol': tolerance},
-            op_bfgs_kwargs={'xtol': tolerance, 'ftol': tolerance}
+            op_bfgs_kwargs={}
         )
         logger.info("Cannon training completed")
         self._model._set_s2_by_hogg_heuristic()
