@@ -4,12 +4,24 @@
 import numpy as np
 from multiprocessing import cpu_count
 import logging
-from astropy.table import Table
 import AnniesLasso as tc
 
 import fourgp_speclib
 
 logger = logging.getLogger(__name__)
+
+
+# This is a drop-in replacement for astropy Tables. Astropy is a bit of a pain to install on lunarc because it needs
+# cfitsio, so this saves a lot of trouble...
+def dcf_table(names, rows):
+    dtypes = [(i, np.float64) for i in names]
+
+    # Numpy breaks with some incomprehensible error message "expected a readable buffer object" if it doesn't
+    # receive a list of tuples...
+    data = [tuple(i) for i in rows]
+
+    output = np.array(data, dtype=dtypes)
+    return output
 
 
 class CannonInstance(object):
@@ -62,9 +74,9 @@ class CannonInstance(object):
                     label, index, ", ".join(metadata.keys()))
 
         # Compile table of training values of labels from metadata contained in SpectrumArray
-        training_label_values = Table(names=label_names,
-                                      rows=[[training_set.get_metadata(index)[label] for label in label_names]
-                                            for index in range(len(training_set))])
+        training_label_values = dcf_table(names=label_names,
+                                          rows=[[training_set.get_metadata(index)[label] for label in label_names]
+                                                for index in range(len(training_set))])
 
         self._model = tc.L1RegularizedCannonModel(labelled_set=training_label_values,
                                                   normalized_flux=training_set.values,
