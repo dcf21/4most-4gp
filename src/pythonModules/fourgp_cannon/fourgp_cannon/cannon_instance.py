@@ -72,6 +72,9 @@ class CannonInstance(object):
                 assert label in metadata, "Label <{}> not set on training spectrum number {}. " \
                                           "Labels on this spectrum are: {}.".format(
                     label, index, ", ".join(metadata.keys()))
+                assert np.isfinite(metadata[label]), "Label <{}> is not finite on training spectrum number {}. " \
+                                          "Labels on this spectrum are: {}.".format(
+                    label, index, metadata)
 
         # Compile table of training values of labels from metadata contained in SpectrumArray
         training_label_values = dcf_table(names=label_names,
