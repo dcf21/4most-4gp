@@ -30,7 +30,8 @@ class CannonInstance(object):
     loaded from 4GP SpectrumLibrary objects.
     """
 
-    def __init__(self, training_set, label_names, censors=None, progress_bar=False, threads=None, tolerance=1e-4):
+    def __init__(self, training_set, label_names, censors=None, progress_bar=False, threads=None, tolerance=1e-4,
+                 load_from_file=None):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
         
@@ -46,6 +47,10 @@ class CannonInstance(object):
 
         :param tolerance:
             The tolerance xtol which the method <scipy.optimize.fmin_powell> uses to determine convergence.
+
+        :param load_from_file:
+            The filename of the internal state of a pre-trained Cannon, which we should load rather than doing
+            training from scratch.
         """
 
         assert isinstance(training_set, fourgp_speclib.SpectrumArray), \
@@ -98,13 +103,18 @@ class CannonInstance(object):
         self._model.s2 = 0
         self._model.regularization = 0
 
-        logger.info("Starting to train the Cannon")
-        self._model.train(
-            progressbar=self._progress_bar,
-            op_kwargs={'xtol': tolerance, 'ftol': tolerance},
-            op_bfgs_kwargs={}
-        )
-        logger.info("Cannon training completed")
+        if load_from_file is None:
+            logger.info("Starting to train the Cannon")
+            self._model.train(
+                progressbar=self._progress_bar,
+                op_kwargs={'xtol': tolerance, 'ftol': tolerance},
+                op_bfgs_kwargs={}
+            )
+            logger.info("Cannon training completed")
+        else:
+            logger.info("Loading Cannon from disk")
+            self._model.load(filename=load_from_file)
+            logger.info("Cannon loaded successfully")
         self._model._set_s2_by_hogg_heuristic()
 
     def fit_spectrum(self, spectrum):
@@ -160,7 +170,9 @@ class CannonInstance(object):
         :return:
             None
         """
-        self._model.save(filename=filename, overwrite=overwrite)
+        self._model.save(filename=filename,
+                         include_training_data=False,
+                         overwrite=overwrite)
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,
