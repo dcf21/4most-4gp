@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # This is a drop-in replacement for astropy Tables. Astropy is a bit of a pain to install on lunarc because it needs
 # cfitsio, so this saves a lot of trouble...
 def dcf_table(names, rows):
-    dtypes = [(i, np.float64) for i in names]
+    dtypes = [(str(i), np.float64) for i in names]
 
     # Numpy breaks with some incomprehensible error message "expected a readable buffer object" if it doesn't
     # receive a list of tuples...
