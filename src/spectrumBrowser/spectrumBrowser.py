@@ -141,6 +141,7 @@ def spectrum_view(library, spec_id):
         pass
     parent_url = url_for("library_search", library=library)
     self_url = url_for("spectrum_view", library=library, spec_id=spec_id)
+    txt_url = url_for("spectrum_txt", library=library, spec_id=spec_id)
     data_url = url_for("spectrum_json", library=library, spec_id=spec_id)
     png_url = url_for("spectrum_png", library=library, spec_id=spec_id, lambda_min=lambda_min, lambda_max=lambda_max)
     path = os_path.join(args.path, library)
@@ -150,7 +151,8 @@ def spectrum_view(library, spec_id):
     metadata = x.get_metadata(ids=int(spec_id))[0]
     metadata["spectrum_id"] = spec_id
     return render_template('spectrum.html', path=args.path, library=library, metadata_keys=metadata_keys,
-                           parent_url=parent_url, metadata=metadata, data_url=data_url, png_url=png_url,
+                           parent_url=parent_url, metadata=metadata,
+                           txt_url=txt_url, data_url=data_url, png_url=png_url,
                            self_url=self_url, lambda_min=lambda_min, lambda_max=lambda_max)
 
 
@@ -201,4 +203,4 @@ def spectrum_png(library, spec_id, lambda_min, lambda_max):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0" if args.public else "127.0.0.1")
+    app.run(port=81, host="0.0.0.0" if args.public else "127.0.0.1")

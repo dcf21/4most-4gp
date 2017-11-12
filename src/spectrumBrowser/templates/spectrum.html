@@ -38,4 +38,15 @@
 </form>
 
 <img src="{{png_url}}">
+
+<div>
+<form method="get" action="{{txt_url}}">
+<input style="margin:16px;" type="submit" name="Download as text" value="Download as text" />
+</form>
+
+<form method="get" action="{{data_url}}">
+<input style="margin:16px;" type="submit" name="Download as JSON" value="Download as JSON" />
+</form>
+</div>
+
 {% endblock %}
