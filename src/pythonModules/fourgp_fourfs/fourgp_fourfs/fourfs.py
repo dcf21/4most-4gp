@@ -345,6 +345,7 @@ class FourFS:
                 # Read the data from the FITS files
                 wavelengths = [item['LAMBDA'] for item in d]
                 fluxes = [(item['REALISATION'] - item['SKY']) for item in d]
+                fluences = [item['FLUENCE'] for item in d]
                 snrs = [item['SNR'] for item in d]
 
                 # In 4MOST LRS mode, the wavelengths bands overlap, so we cut off the ends of the bands
@@ -357,11 +358,14 @@ class FourFS:
                     )
                     wavelengths = [item[indices[j]] for j, item in enumerate(wavelengths)]
                     fluxes = [item[indices[j]] for j, item in enumerate(fluxes)]
+                    fluences = [item[indices[j]] for j, item in enumerate(fluences)]
                     snrs = [item[indices[j]] for j, item in enumerate(snrs)]
 
-                wavelengths_final = np.array(sum([list(item) for item in wavelengths], []))
-                fluxes_final = np.array(sum([list(item) for item in fluxes], []))
-                snrs_final = np.array(sum([list(item) for item in snrs], []))
+                # Append the three arms of 4MOST together into a single spectrum
+                wavelengths_final = np.concatenate(wavelengths)
+                fluxes_final = np.concatenate(fluxes)
+                # fluences_final = np.concatenate(fluences)
+                snrs_final = np.concatenate(snrs)
 
                 # Load continuum spectra
                 d_c = [fits.open(
@@ -371,7 +375,8 @@ class FourFS:
 
                 # Read the data from the FITS files
                 wavelengths_c = [item['LAMBDA'] for item in d_c]
-                fluxes_c = [(item['REALISATION'] - item['SKY']) for item in d_c]
+                # fluxes_c = [(item['REALISATION'] - item['SKY']) for item in d_c]
+                fluences_c = [item['FLUENCE'] for item in d_c]
 
                 if setup == 'LRS':
                     indices = (
@@ -379,14 +384,16 @@ class FourFS:
                         np.where((wavelengths_c[1] > 5327.7) & (wavelengths_c[1] <= 7031.7))[0],
                         np.where(wavelengths_c[2] > 7031.7)[0]
                     )
-                    wavelengths_c = [item[indices[j]] for j, item in enumerate(wavelengths_c)]
-                    fluxes_c = [item[indices[j]] for j, item in enumerate(fluxes_c)]
+                    # wavelengths_c = [item[indices[j]] for j, item in enumerate(wavelengths_c)]
+                    # fluxes_c = [item[indices[j]] for j, item in enumerate(fluxes_c)]
+                    fluences_c = [item[indices[j]] for j, item in enumerate(fluences_c)]
 
                 # Combine everything into one set of arrays to be saved
-                wavelengths_final_c = np.array(sum([list(item) for item in wavelengths_c], []))
+                # wavelengths_final_c = np.concatenate(wavelengths_c)
 
-                fluxes_final_c = np.array(sum([list(fc * max(f) / max(fc))
-                                               for f, fc in zip(fluxes, fluxes_c) if len(f) > 0], []))
+                fluxes_final_c = np.concatenate([fluence_c * max(fluence) / max(fluence_c)
+                                                 for fluence, fluence_c in zip(fluences, fluences_c)
+                                                 if len(fluence) > 0])
 
                 # Do continuum normalisation
                 normalised_fluxes_final = fluxes_final / fluxes_final_c
