@@ -7,11 +7,12 @@ from warnings import simplefilter
 
 from .convolve import SpectrumConvolver
 from .interpolate import SpectrumInterpolator
+from .gaussian_noise import GaussianNoise
 
 __version__ = "0.1.0"
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # TODO: Remove this when stable.
+logger.setLevel(logging.INFO)  # TODO: Remove this when stable.
 
 handler = logging.StreamHandler()
 handler.setFormatter(logging.Formatter(

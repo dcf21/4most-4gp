@@ -50,7 +50,7 @@ class FourFS:
         self.metadata_store = {}
 
         if snr_list is None:
-            snr_list = (5, 10, 15, 20, 50, 100, 250)
+            snr_list = (10, 20, 50, 80, 100, 130, 180, 250, 5000)
         self.snr_list = snr_list
 
         if snr_definitions is None:
@@ -337,6 +337,7 @@ class FourFS:
                         data = {
                             'LAMBDA': np.zeros(0),
                             'REALISATION': np.zeros(0),
+                            'FLUENCE': np.zeros(0),
                             'SKY': np.zeros(0),
                             'SNR': np.zeros(0)
                         }
