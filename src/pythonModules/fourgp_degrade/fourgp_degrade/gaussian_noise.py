@@ -46,19 +46,20 @@ class GaussianNoise:
         self.wavelength_raster = wavelength_raster
         self.wavelength_arms = []
 
-        wavelength = wavelength_raster[0]
+        wavelength_old = wavelength_raster[0]
         wavelength_delta = None
-        arm_raster = []
+        arm_raster = [wavelength_raster[0]]
         arm_pixel_gaps = []
         for i in range(1, len(wavelength_raster)):
-            wavelength_delta_new = wavelength_raster[i] - wavelength
+            wavelength_delta_new = wavelength_raster[i] - wavelength_old
+            wavelength_old = wavelength_raster[i]
             if wavelength_delta is not None:
                 ratio = wavelength_delta_new / wavelength_delta
                 if ratio < 1:
                     ratio = 1 / ratio
                 if ratio > 1.05:
                     mean_interval = np.mean(np.asarray(arm_pixel_gaps))
-                    self.wavelength_arms.append([arm_raster, mean_interval])
+                    self.wavelength_arms.append([np.asarray(arm_raster), mean_interval])
                     wavelength_delta = None
                     arm_raster = [wavelength_raster[i]]
                     arm_pixel_gaps = []
@@ -66,6 +67,10 @@ class GaussianNoise:
             wavelength_delta = wavelength_delta_new
             arm_raster.append(wavelength_raster[i])
             arm_pixel_gaps.append(wavelength_delta_new)
+
+        # Add final wavelength arm to self.wavelength_arms
+        mean_interval = np.mean(np.asarray(arm_pixel_gaps))
+        self.wavelength_arms.append([np.asarray(arm_raster), mean_interval])
 
         # Process SNR definitions
         if snr_list is None:
@@ -81,7 +86,9 @@ class GaussianNoise:
         self.snr_definitions = snr_definitions
         self.use_snr_definitions = use_snr_definitions
 
-        assert len(use_snr_definitions) == 3, \
+        logger.info("Detected {} wavelength arms".format(len(self.wavelength_arms)))
+
+        assert len(self.use_snr_definitions) == len(self.wavelength_arms), \
             "Need an SNR definition for each wavelength arm. " \
             "Received {} definitions, but autodetected {} arms.". \
                 format(len(self.use_snr_definitions), len(self.wavelength_arms))
@@ -107,7 +114,8 @@ class GaussianNoise:
 
         for spectrum in spectra_list:
 
-            # Convolve and resample
+            # Convolve and resample onto new wavelength raster.
+            # Each wavelength arm is separately convolved by mean pixel spacing.
             resampled_spectrum = []  # resampled_spectrum[ 0=full spectrum ; 1=continuum normalised ][ wavelength_arm ]
             for index, item in enumerate(spectrum):
                 resampled_spectrum.append([])
@@ -116,12 +124,13 @@ class GaussianNoise:
                     convolved = convolver.gaussian_convolve(pixel_spacing)
                     interpolator = SpectrumInterpolator(convolved)
                     interpolated = interpolator.onto_raster(raster)
-                    resampled_spectrum[-1].append(interpolated)
+                    resampled_spectrum[-1].append(interpolated.values)
 
             # Calculate fake continuum
-            continuum = []
+            continuum_per_arm = []
             for index_arm in range(len(self.wavelength_arms)):
-                continuum.append(resampled_spectrum[0][index_arm] / resampled_spectrum[1][index_arm])
+                continuum_per_arm.append(resampled_spectrum[0][index_arm] / resampled_spectrum[1][index_arm])
+            continuum = np.concatenate(continuum_per_arm)
 
             # Measure signal in range
             mean_signal_per_pixel = {}
@@ -157,8 +166,8 @@ class GaussianNoise:
                     noised_signal_errors = np.ones_like(noised_signal) * noise_level
 
                     # Compute the new continuum-normalised spectrum based on the noised signal
-                    noised_signal_cn = noised_signal / continuum[index_arm]
-                    noised_signal_errors_cn = noised_signal_errors / continuum[index_arm]
+                    noised_signal_cn = noised_signal / continuum_per_arm[index_arm]
+                    noised_signal_errors_cn = noised_signal_errors / continuum_per_arm[index_arm]
 
                     # Append the various wavelength arms together
                     output_values = np.append(output_values, noised_signal)
