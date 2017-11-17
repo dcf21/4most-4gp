@@ -176,13 +176,19 @@ class GaussianNoise:
                     output_value_errors_cn = np.append(output_value_errors_cn, noised_signal_errors_cn)
 
                 # Convert output signal into a spectrum object
+                metadata = spectrum[0].metadata.copy()
+                metadata['continuum_normalised'] = 0
+                metadata['SNR'] = float(snr_value)
                 output_spectrum = Spectrum(wavelengths=self.wavelength_raster,
                                            values=output_values,
-                                           value_errors=output_value_errors)
+                                           value_errors=output_value_errors,
+                                           metadata=metadata.copy())
 
+                metadata['continuum_normalised'] = 1
                 output_spectrum_cn = Spectrum(wavelengths=self.wavelength_raster,
                                               values=output_values_cn,
-                                              value_errors=output_value_errors_cn)
+                                              value_errors=output_value_errors_cn,
+                                              metadata=metadata.copy())
 
                 # Add to output data structure
                 output_item[snr_value] = (output_spectrum, output_spectrum_cn)
