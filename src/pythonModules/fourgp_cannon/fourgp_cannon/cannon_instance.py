@@ -151,6 +151,104 @@ class CannonInstance(object):
 
         return labels, cov, meta
 
+    def fit_spectrum_with_continuum(self, spectrum, wavelength_arms, initial_continuum_models):
+        """
+        Fit stellar labels to a spectrum which has not been continuum normalised.
+
+        :param spectrum:
+            A Spectrum object containing the spectrum for the Cannon to fit.
+
+        :type spectrum:
+            Spectrum
+
+        :param wavelength_arms:
+            A list of the wavelength break-points between arms which should have continuum fitted separately.
+
+        :type wavelength_arms:
+            List of wavelengths in A.
+
+        :param initial_continuum_models:
+            List of initial models of the continuum in each wavelength arm.
+
+        :type initial_continuum_models:
+            List of Spectrum
+
+        :return:
+        """
+
+        from fourgp_speclib import Spectrum, spectrum_splice
+        from fourgp_degrade import SpectrumInterpolator
+
+        assert isinstance(spectrum, fourgp_speclib.Spectrum), \
+            "Supplied spectrum for the Cannon to fit is not a Spectrum object."
+
+        assert spectrum.raster_hash == self._training_set.raster_hash, \
+            "Supplied spectrum for the Cannon to fit is not sampled on the same raster as the training set."
+
+        assert isinstance(initial_continuum_models, (list, tuple)), \
+            "Input continuum models must be a list or tuple of Spectrum objects."
+
+        # Fitting tolerances
+        max_mean_error = 0.01  # Quite once we have achieved a mean error of 1%
+        max_iterations = 10  # Iterate a maximum of 10 times
+
+        # Work out the raster of pixels inside each wavelength arm
+        raster = spectrum.wavelengths
+        lower_cut = 0
+        arm_rasters = []
+        for break_point in wavelength_arms:
+            arm_rasters.append(raster[(raster>=lower_cut) * (raster < break_point)])
+            lower_cut = break_point
+        arm_rasters.append(raster[raster>=lower_cut])
+
+        # Make sure that initial continuum fits are sampled on the right rasters
+        assert len(arm_rasters) == len(initial_continuum_models), \
+            "Require one continuum model for every wavelength arm in the input spectrum"
+
+        continuum_models = []
+        for i, arm_raster in enumerate(arm_rasters):
+            assert isinstance(initial_continuum_models[i], Spectrum), \
+                "Initial continuum model is not a Spectrum object."
+
+            interpolator = SpectrumInterpolator(input_spectrum=initial_continuum_models[i])
+            continuum_models.append(interpolator.onto_raster(arm_raster))
+        continuum_model = spectrum_splice(*continuum_models)
+
+        # Begin iterative fitting
+        iteration = 0
+        while True:
+            iteration += 1
+
+            # Create continuum-normalised spectrum
+            cn_spectrum = spectrum / continuum_model
+
+            # Run the Cannon
+            labels, cov, meta = self.fit_spectrum(spectrum=cn_spectrum)
+
+            # Fetch the Cannon's model spectrum
+            model = Spectrum(wavelengths=raster,
+                             values=self._model.predict(labels=labels),
+                             value_errors=np.zeros_like(raster))
+
+            # Quality control: work out rms differences between Cannon model and input spectrum
+            difference_spectrum = model / cn_spectrum
+
+            mean_rms_difference = np.sqrt(np.mean(difference_spectrum.values**2))
+
+            # Decide whether output is good enough for us to stop iterating
+            if (iteration<max_iterations) and (mean_rms_difference<max_mean_error):
+                break
+
+            # Refine continuum model
+            continuum = continuum_model * difference_spectrum
+            lower_cut = 0
+            arm_continuum = []
+            for break_point in wavelength_arms:
+
+
+
+        return labels, cov, meta
+
     def save_model(self, filename, overwrite=True):
         """
         Save the parameters of a trained Cannon instance.

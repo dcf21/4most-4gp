@@ -45,6 +45,25 @@ def requires_common_raster(method):
 
     return wrapper
 
+def spectrum_splice(*spectra):
+    """
+    Splice together a number of input spectra.
+
+    :param spectra:
+        A list of spectra to be spliced together.
+
+    :return:
+        Spliced Spectrum object
+    """
+
+    wavelengths = np.concatenate([x.wavelengths for x in spectra])
+    values = np.concatenate([x.values for x in spectra])
+    value_errors = np.concatenate([x.value_errors for x in spectra])
+
+    return Spectrum(wavelengths=wavelengths,
+                    values=values,
+                    value_errors=value_errors)
+
 
 class Spectrum(object):
     """
