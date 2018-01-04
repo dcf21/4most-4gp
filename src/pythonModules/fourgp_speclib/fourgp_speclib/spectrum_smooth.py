@@ -298,8 +298,8 @@ class SpectrumSmooth(Spectrum):
         assert isinstance(value, (list, tuple)), \
             "Coefficients of a smooth spectrum must be a list of numerical terms."
 
-        assert len(value) == self._terms + 1, \
-            "Number of coefficients of smooth spectrum must equal {}.".format(self._terms + 1)
+        assert len(value) == self._terms, \
+            "Number of coefficients of smooth spectrum must equal {}.".format(self._terms)
 
         assert all(isinstance(i, (float, int)) for i in value), \
             "Smooth spectrum coefficients must all be floats or ints."
@@ -369,7 +369,7 @@ class SpectrumPolynomial(SpectrumSmooth):
         coefficients = np.asarray(coefficients, dtype=np.float64)
 
         # Express polynomial as ((a_2 * x) + a_1)*x) + a_0
-        for order in range(1, self._terms + 2):
+        for order in range(1, self._terms + 1):
             output *= raster
             output += coefficients[-order]
 

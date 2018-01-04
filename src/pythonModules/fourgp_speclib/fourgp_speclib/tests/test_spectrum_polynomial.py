@@ -32,8 +32,9 @@ class TestSpectrumPolynomial(unittest.TestCase):
                                                    value_errors=self._absorption_value_errors,
                                                    metadata={"origin": "unit-test"})
 
-        self._polynomial = fourgp_speclib.SpectrumPolynomial(wavelengths=self._observed_raster,
-                                                             terms=2)
+        self._polynomial = fourgp_speclib.SpectrumSmoothFactory(function_family=fourgp_speclib.SpectrumPolynomial,
+                                                                wavelengths=self._observed_raster,
+                                                                terms=3)
 
     def test_data_sizes_must_match_1(self):
         with self.assertRaises(AssertionError):
@@ -41,7 +42,7 @@ class TestSpectrumPolynomial(unittest.TestCase):
             absorption = fourgp_speclib.Spectrum(wavelengths=raster,
                                                  values=raster,
                                                  value_errors=raster)
-            self._polynomial.fit_to_continuum(other=self._observed, template=absorption)
+            self._polynomial.fit_to_continuum_via_template(other=self._observed, template=absorption)
 
     def test_data_sizes_must_match_2(self):
         with self.assertRaises(AssertionError):
@@ -49,12 +50,12 @@ class TestSpectrumPolynomial(unittest.TestCase):
             other = fourgp_speclib.Spectrum(wavelengths=raster,
                                             values=raster,
                                             value_errors=raster)
-            self._polynomial.fit_to_continuum(other=other, template=self._absorption)
+            self._polynomial.fit_to_continuum_via_template(other=other, template=self._absorption)
 
     def test_fitting(self):
-        self._polynomial.fit_to_continuum(other=self._observed, template=self._absorption)
+        polynomial = self._polynomial.fit_to_continuum_via_template(other=self._observed, template=self._absorption)
         coefficients_expected = np.asarray([0, 1, 0], dtype=np.float64)
-        self.assertLess(np.max(np.abs(np.asarray(self._polynomial.coefficients) - coefficients_expected)), 0.1)
+        self.assertLess(np.max(np.abs(np.asarray(polynomial.coefficients) - coefficients_expected)), 0.1)
 
     def tearDown(self):
         """
