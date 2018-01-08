@@ -244,8 +244,7 @@ class CannonInstance(object):
             lower_cut = 0
             arm_continuum = []
             for break_point in wavelength_arms:
-
-
+                pass
 
         return labels, cov, meta
 
