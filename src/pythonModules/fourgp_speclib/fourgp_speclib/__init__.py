@@ -13,7 +13,7 @@ from .spectrum_library_sqlite import SpectrumLibrarySqlite
 from .spectrum_library import SpectrumLibrary
 from .spectrum_array import SpectrumArray
 from .spectrum import Spectrum, spectrum_splice
-from .spectrum_polynomial import SpectrumPolynomial
+from .spectrum_smooth import SpectrumSmoothFactory, SpectrumSmooth, SpectrumPolynomial
 
 # Allow MySQL binding to silently fail if system doesn't have MySQLdb package installed
 try:

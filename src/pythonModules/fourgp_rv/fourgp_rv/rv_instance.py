@@ -226,7 +226,7 @@ class RvInstance(object):
 
         # Multiply the template spectrum by the observed spectrum's continuum
         template_continuum = fourgp_speclib.SpectrumPolynomial(wavelengths=template_resampled.wavelengths,
-                                                               terms=2,
+                                                               terms=3,
                                                                coefficients=(c0, c1, c2))
         template_with_continuum = template_continuum * template_resampled
 
@@ -281,8 +281,10 @@ class RvInstance(object):
             extract_item(0)
 
         # Make initial continuum fit to observed spectrum, using small wavelength window at 5650 to 5820 A
-        observed_continuum_fit = fourgp_speclib.SpectrumPolynomial(wavelengths=observed_shared.wavelengths,
-                                                                   terms=2)
+        observed_continuum_fitter = fourgp_speclib.SpectrumSmoothFactory(
+            wavelengths=observed_shared.wavelengths,
+            terms=3,
+            function_family=fourgp_speclib.SpectrumPolynomial)
 
         # Pick a template continuum normalised spectrum
         template_continuum_normalised = RvInstance.pick_template_spectrum(template_library=self._template_spectra,
@@ -292,7 +294,7 @@ class RvInstance(object):
         template_interpolated = interpolator.match_to_other_spectrum(observed_shared)
 
         # Fit continuum to observed spectrum, assuming its absorption features matched by template at zero rv
-        observed_continuum_fit.fit_to_continuum(
+        observed_continuum_fit = observed_continuum_fitter.fit_to_continuum_via_template(
             other=observed_shared,
             template=template_interpolated,
             lambda_min_norm=5650, lambda_max_norm=5820)
