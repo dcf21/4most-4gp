@@ -78,7 +78,7 @@ class CannonInstance(object):
                                           "Labels on this spectrum are: {}.".format(
                     label, index, ", ".join(metadata.keys()))
                 assert np.isfinite(metadata[label]), "Label <{}> is not finite on training spectrum number {}. " \
-                                          "Labels on this spectrum are: {}.".format(
+                                                     "Labels on this spectrum are: {}.".format(
                     label, index, metadata)
 
         # Compile table of training values of labels from metadata contained in SpectrumArray
@@ -151,7 +151,7 @@ class CannonInstance(object):
 
         return labels, cov, meta
 
-    def fit_spectrum_with_continuum(self, spectrum, wavelength_arms, continuum_model_factory):
+    def fit_spectrum_with_continuum(self, spectrum, wavelength_arms, continuum_model_family):
         """
         Fit stellar labels to a spectrum which has not been continuum normalised.
 
@@ -167,17 +167,16 @@ class CannonInstance(object):
         :type wavelength_arms:
             List of wavelengths in A.
 
-        :param continuum_model_factory:
-            A factory for smooth functions of some form, which we use to fit the continuum in this spectrum.
+        :param continuum_model_family:
+            A class defining smooth functions of some form, which we use to fit the continuum in this spectrum.
 
-        :type continuum_model_factory:
-            SpectrumSmoothFactory instance
+        :type continuum_model_family:
+            SpectrumSmooth subclass
 
         :return:
         """
 
-        from fourgp_speclib import Spectrum, SpectrumSmoothFactory, spectrum_splice
-        from fourgp_degrade import SpectrumInterpolator
+        from fourgp_speclib import Spectrum, SpectrumSmooth, SpectrumSmoothFactory, spectrum_splice
 
         assert isinstance(spectrum, fourgp_speclib.Spectrum), \
             "Supplied spectrum for the Cannon to fit is not a Spectrum object."
@@ -185,8 +184,8 @@ class CannonInstance(object):
         assert spectrum.raster_hash == self._training_set.raster_hash, \
             "Supplied spectrum for the Cannon to fit is not sampled on the same raster as the training set."
 
-        assert isinstance(continuum_model_factory, SpectrumSmoothFactory), \
-            "Input continuum model factory must be an instance of <SpectrumSmoothFactory>."
+        assert issubclass(continuum_model_family, SpectrumSmooth), \
+            "Input continuum model family must be a subclass of <SpectrumSmooth>."
 
         # Fitting tolerances
         max_iterations = 3  # Iterate a maximum of 3 times
@@ -196,12 +195,12 @@ class CannonInstance(object):
         lower_cut = 0
         arm_rasters = []
         for break_point in wavelength_arms:
-            arm_rasters.append((raster>=lower_cut) * (raster < break_point))
+            arm_rasters.append((raster >= lower_cut) * (raster < break_point))
             lower_cut = break_point
-        arm_rasters.append(raster>=lower_cut)
+        arm_rasters.append(raster >= lower_cut)
 
         # Make initial continuum mask, which covers entire spectrum
-        continuum_mask = np.ones_like(raster)
+        continuum_mask = np.ones_like(raster, dtype=bool)
 
         # Begin iterative fitting
         iteration = 0
@@ -210,14 +209,22 @@ class CannonInstance(object):
 
             continuum_models = []
             for i, arm_raster in enumerate(arm_rasters):
-                pixel_mask = arm_raster[i] * continuum_mask
+                pixel_mask = arm_raster * continuum_mask
                 continuum_raster = raster[pixel_mask]
                 continuum_values = spectrum.values[pixel_mask]
 
-                continuum_spectrum = Spectrum(wavelengths=continuum_raster, values=continuum_values)
-                continuum_smooth = continuum_model_factory.fit_to_continuum_via_mask(other=continuum_spectrum,
-                                                                                     mask=np.ones_like(continuum_raster)
-                                                                                     )
+                continuum_spectrum = Spectrum(wavelengths=continuum_raster,
+                                              values=continuum_values,
+                                              value_errors=np.zeros_like(continuum_raster)
+                                              )
+
+                continuum_model_factory = SpectrumSmoothFactory(function_family=continuum_model_family,
+                                                                wavelengths=continuum_raster)
+
+                continuum_smooth = continuum_model_factory.fit_to_continuum_via_mask(
+                    other=continuum_spectrum,
+                    mask=np.ones_like(continuum_raster, dtype=bool)
+                )
                 continuum_models.append(continuum_smooth)
             continuum_model = spectrum_splice(*continuum_models)
 
@@ -229,24 +236,17 @@ class CannonInstance(object):
 
             # Fetch the Cannon's model spectrum
             model = Spectrum(wavelengths=raster,
-                             values=self._model.predict(labels=labels),
+                             values=self._model.predict(labels=labels)[0],
                              value_errors=np.zeros_like(raster))
 
             # Make new model of which pixels are continuum
-            continuum_mask = (model.values>0.99) * (model.values<1.01)
+            continuum_mask = (model.values > 0.99) * (model.values < 1.01)
 
             # Decide whether output is good enough for us to stop iterating
-            if iteration<max_iterations:
+            if iteration >= max_iterations:
                 break
 
-            # Refine continuum model
-            continuum = continuum_model * difference_spectrum
-            lower_cut = 0
-            arm_continuum = []
-            for break_point in wavelength_arms:
-                pass
-
-        return labels, cov, meta
+        return labels, cov, meta, model, continuum_mask
 
     def save_model(self, filename, overwrite=True):
         """
