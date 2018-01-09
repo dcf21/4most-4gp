@@ -121,7 +121,7 @@ class CannonInstance(object):
 
     def fit_spectrum(self, spectrum):
         """
-        Fit stellar labels to a spectrum.
+        Fit stellar labels to a continuum-normalised spectrum.
         
         :param spectrum:
             A Spectrum object containing the spectrum for the Cannon to fit.
@@ -155,7 +155,9 @@ class CannonInstance(object):
 
     def fit_spectrum_with_continuum(self, spectrum, wavelength_arms, continuum_model_family, debugging=False):
         """
-        Fit stellar labels to a spectrum which has not been continuum normalised.
+        Fit stellar labels to a spectrum which has not been continuum normalised. This method is currently not
+        very good, and should not be trusted. For the time being, you should continuum normalise spectra yourself
+        and call the fit_spectrum() method instead.
 
         :param spectrum:
             A Spectrum object containing the spectrum for the Cannon to fit.
@@ -280,7 +282,8 @@ class CannonInstance(object):
             # Produce debugging output if requested
             if debugging:
                 np.savetxt("/tmp/debug_{:06d}_{:03d}.txt".format(self._debugging_output_counter, iteration),
-                           np.transpose([raster, spectrum.values, continuum_model.values, model.values, continuum_mask])
+                           np.transpose([raster, spectrum.values, spectrum.value_errors,
+                                         continuum_model.values, model.values, continuum_mask])
                            )
 
             # Decide whether output is good enough for us to stop iterating
