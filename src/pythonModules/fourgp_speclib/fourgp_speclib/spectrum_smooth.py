@@ -141,13 +141,15 @@ class SpectrumSmoothFactory:
         other_wavelengths_masked = other.wavelengths[mask]
         template_values_masked = template.values[mask]
 
-        assert len(other) > 0, "No good data in spectrum <other>."
-        assert len(template) > 0, "No good data in spectrum <template>."
+        if len(other) == 0:
+            return "No good data in spectrum <other>."
+        if len(template) == 0:
+            return "No good data in spectrum <template>."
 
         def error_func(coefficients, other_wavelengths_masked_, other_values_masked_,
                        other_value_errors_masked_, template_values_masked_):
             return ((other_values_masked_ -
-                     template_values_masked_ * output._evaluate_function(other_wavelengths_masked_, coefficients)) /
+                     template_values_masked_ * output.evaluate_function(other_wavelengths_masked_, coefficients)) /
                     other_value_errors_masked_)
 
         # roughly fit the template to the observed spectrum
@@ -206,11 +208,12 @@ class SpectrumSmoothFactory:
         other_value_errors_masked = other.value_errors[mask * mask_extra]
         other_wavelengths_masked = other.wavelengths[mask * mask_extra]
 
-        assert len(other) > 0, "No good data in spectrum <other>."
+        if len(other) == 0:
+            return "No good data in spectrum <other>."
 
         def error_func(coefficients, other_wavelengths_masked_, other_values_masked_, other_value_errors_masked_):
             return ((
-                            other_values_masked_ - output._evaluate_function(other_wavelengths_masked_, coefficients)
+                            other_values_masked_ - output.evaluate_function(other_wavelengths_masked_, coefficients)
                     ) / other_value_errors_masked_)
 
         coefficients_initial = np.asarray((1,) + (0,) * (self._terms-1))
@@ -343,15 +346,15 @@ class SpectrumSmooth(Spectrum):
         :return:
             None
         """
-        self._values = self._evaluate_function(self._wavelengths, self.coefficients)
+        self._values = self.evaluate_function(self._wavelengths, self.coefficients)
 
-    def _evaluate_function(self, raster, coefficients):
+    def evaluate_function(self, raster, coefficients):
         """
         Evaluate function at every point on wavelength raster.
         :return:
             None
         """
-        raise NotImplementedError("The _evaluate_function method must be implemented by a subclasses.")
+        raise NotImplementedError("The evaluate_function method must be implemented by a subclasses.")
 
 
 class SpectrumPolynomial(SpectrumSmooth):
@@ -359,7 +362,7 @@ class SpectrumPolynomial(SpectrumSmooth):
     A class implementing a polynomial spectrum.
     """
 
-    def _evaluate_function(self, raster, coefficients):
+    def evaluate_function(self, raster, coefficients):
         """
         Evaluate polynomial at every point on wavelength raster.
         :return:

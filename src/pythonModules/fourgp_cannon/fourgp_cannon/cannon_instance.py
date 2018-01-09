@@ -53,6 +53,8 @@ class CannonInstance(object):
             training from scratch.
         """
 
+        self._debugging_output_counter = 0
+
         assert isinstance(training_set, fourgp_speclib.SpectrumArray), \
             "Training set for the Cannon should be a SpectrumArray."
         self._training_set = training_set
@@ -151,7 +153,7 @@ class CannonInstance(object):
 
         return labels, cov, meta
 
-    def fit_spectrum_with_continuum(self, spectrum, wavelength_arms, continuum_model_family):
+    def fit_spectrum_with_continuum(self, spectrum, wavelength_arms, continuum_model_family, debugging=False):
         """
         Fit stellar labels to a spectrum which has not been continuum normalised.
 
@@ -173,10 +175,17 @@ class CannonInstance(object):
         :type continuum_model_family:
             SpectrumSmooth subclass
 
+        :param debugging:
+            Boolean flag determining whether we produce debugging output
+
+        :type debugging:
+            bool
+
         :return:
         """
 
         from fourgp_speclib import Spectrum, SpectrumSmooth, SpectrumSmoothFactory, spectrum_splice
+        from fourgp_degrade import SpectrumInterpolator
 
         assert isinstance(spectrum, fourgp_speclib.Spectrum), \
             "Supplied spectrum for the Cannon to fit is not a Spectrum object."
@@ -187,10 +196,14 @@ class CannonInstance(object):
         assert issubclass(continuum_model_family, SpectrumSmooth), \
             "Input continuum model family must be a subclass of <SpectrumSmooth>."
 
+        if debugging:
+            self._debugging_output_counter += 1
+
         # Fitting tolerances
-        max_iterations = 3  # Iterate a maximum of 3 times
+        max_iterations = 20  # Iterate a maximum number of times
 
         # Work out the raster of pixels inside each wavelength arm
+        logger.info("Wavelength arm breakpoints: {}".format(wavelength_arms))
         raster = spectrum.wavelengths
         lower_cut = 0
         arm_rasters = []
@@ -202,22 +215,31 @@ class CannonInstance(object):
         # Make initial continuum mask, which covers entire spectrum
         continuum_mask = np.ones_like(raster, dtype=bool)
 
-        # Begin iterative fitting
+        # Begin iterative fitting of continuum
         iteration = 0
         while True:
             iteration += 1
 
+            # Treat each wavelength arm separately.
             continuum_models = []
             for i, arm_raster in enumerate(arm_rasters):
-                pixel_mask = arm_raster * continuum_mask
+                # Make a mask of pixels which are both continuum and inside this wavelength arm
+                pixel_mask = (arm_raster * continuum_mask *
+                              np.isfinite(spectrum.value_errors) * (spectrum.value_errors > 0)
+                              )
+                # logger.info("Continuum pixels in arm {}: {} / {}".format(i, sum(pixel_mask), len(pixel_mask)))
                 continuum_raster = raster[pixel_mask]
                 continuum_values = spectrum.values[pixel_mask]
+                continuum_value_errors = spectrum.value_errors[pixel_mask]
 
+                # Make a new spectrum object containing only continuum pixels inside this wavelength arm
                 continuum_spectrum = Spectrum(wavelengths=continuum_raster,
                                               values=continuum_values,
-                                              value_errors=np.zeros_like(continuum_raster)
+                                              value_errors=continuum_value_errors,
                                               )
+                # logger.info("Continuum spectrum length: {}".format(len(continuum_spectrum)))
 
+                # Fit a smooth function through these pixels
                 continuum_model_factory = SpectrumSmoothFactory(function_family=continuum_model_family,
                                                                 wavelengths=continuum_raster)
 
@@ -225,10 +247,21 @@ class CannonInstance(object):
                     other=continuum_spectrum,
                     mask=np.ones_like(continuum_raster, dtype=bool)
                 )
-                continuum_models.append(continuum_smooth)
+
+                if isinstance(continuum_smooth, basestring):
+                    logger.info(continuum_smooth)
+                    return None, None, None, None, None, None
+
+                # logger.info("Best-fit polynomial coefficients: {}".format(continuum_smooth.coefficients))
+
+                # Interpolate smooth function onto the full raster of pixels within this wavelength arm
+                interpolator = SpectrumInterpolator(input_spectrum=continuum_smooth)
+                continuum_models.append(interpolator.onto_raster(raster[arm_raster]))
+
+            # Splice together the continuum in all the wavelength arms
             continuum_model = spectrum_splice(*continuum_models)
 
-            # Create continuum-normalised spectrum
+            # Create continuum-normalised spectrum using the continuum model we've just made
             cn_spectrum = spectrum / continuum_model
 
             # Run the Cannon
@@ -239,14 +272,22 @@ class CannonInstance(object):
                              values=self._model.predict(labels=labels)[0],
                              value_errors=np.zeros_like(raster))
 
-            # Make new model of which pixels are continuum
+            # Make new model of which pixels are continuum (based on Cannon's template being close to one)
             continuum_mask = (model.values > 0.99) * (model.values < 1.01)
+            logger.info("Continuum pixels: {} / {}".format(sum(continuum_mask), len(continuum_mask)))
+            logger.info("Best-fit labels: {}".format(list(labels[0])))
+
+            # Produce debugging output if requested
+            if debugging:
+                np.savetxt("/tmp/debug_{:06d}_{:03d}.txt".format(self._debugging_output_counter, iteration),
+                           np.transpose([raster, spectrum.values, continuum_model.values, model.values, continuum_mask])
+                           )
 
             # Decide whether output is good enough for us to stop iterating
             if iteration >= max_iterations:
                 break
 
-        return labels, cov, meta, model, continuum_mask
+        return labels, cov, meta, model, continuum_mask, continuum_model
 
     def save_model(self, filename, overwrite=True):
         """
