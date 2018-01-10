@@ -1,23 +1,41 @@
 # 4most-4gp
 
 This is the code for the IWG7 Galactic pipeline for the 4MOST multi-object
-spectrograph. It comprises a collection of python modules which wrap spectral
-synthesis and processing tools including Turbospectrum, 4FS, radial-velocity
-estimating codes, and the Cannon.
+spectrograph. It comprises a collection of Python modules which use a common data format to
+store and manipulate spectra and their associated metadata. It makes it easy to pass spectra
+between a range of spectral synthesis and processing tools including Turbospectrum, the
+4MOST Facility Simulator (4FS) and the Cannon, without the need for manual data format
+conversion. It includes the ability to store spectra in libraries and search for them by arbitrary
+metadata constraints, making it easy to create new tests on subgroups of stars filtered from
+larger samples.
 
-A common data format is used to store spectra and their associated metadata,
-including the ability to search for spectra by arbitrary metadata constraints.
-This allows spectra to be easily passed between any combination of tools. A
-simple web interface allows the contents of spectrum libraries to be searched
+In addition, a simple web interface allows the contents of spectrum libraries to be searched
 and viewed quickly for diagnostic purposes.
 
-This code is under active development, but there are no stable releases yet
-because it isn't stable.
+The framework is available in two repositories on GitHub, and includes step-by-step
+installation instructions. The first repository contains the Python modules which provide
+programmatic interfaces for creating and manipulating libraries of spectra, including wrappers
+for passing them to various analysis tools:
+
+[https://github.com/dcf21/4most-4gp]
+
+The second repository contains python scripts which utilise these modules to synthesise the
+spectra and perform the tests described in this report:
+
+[https://github.com/dcf21/4most-4gp-scripts]
+
+This code is under active development, and stable releases are periodically made. Various branches are available
+on GitHub. Stable released are given date stamps, for example, `release-2018-01-09-1`. The master branch points
+to the most recent release. The `dev` branch is not stable and should be used with extreme caution.
 
 # Code structure
 
 The code is organised into a collection of python modules, most of which do not
 depend on each other. These can be found in the directory `src/pythonModules`.
+
+The code is divided up in this way since each module has different dependencies,
+and it allows functions to be used without installing every dependency.
+
 It is strongly recommended that they be installed in the python virtual
 environment as described below, and that you do not tamper with your
 system-wide python installation.
@@ -64,7 +82,14 @@ apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtual
 
 ## Installing 4GP in a python virtual environment
 
-Follow these steps in a Linux shell:
+4GP is distributed with a standard `setuptools` installation script `setup.py` which allows you to install its
+constituent modules into your local python environment.
+
+We strongly recommended that you install them in a python virtual
+environment, rather than tampering with your
+system-wide python installation.
+
+Follow these steps in a Linux shell to do this:
 
 ```
 # Check out code from GitHub
