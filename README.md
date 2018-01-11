@@ -24,9 +24,17 @@ spectra and perform the tests described in this report:
 
 [https://github.com/dcf21/4most-4gp-scripts]
 
-This code is under active development, and stable releases are periodically made. Various branches are available
-on GitHub. Stable released are given date stamps, for example, `release-2018-01-09-1`. The master branch points
-to the most recent release. The `dev` branch is not stable and should be used with extreme caution.
+This code is under active development, and stable releases are periodically
+made.
+
+Visiting the GitHub URLs above will present you with the `master` branch of our
+code, which should always correspond to the latest stable release. If you click
+on the "branches" dropdown menu, you can select a different version of the code
+to download.
+
+Stable releases are given date stamps, for example, `release-2018-01-09-1`. The
+master branch points to the most recent release. The `dev` branch is not stable
+and should be used with extreme caution.
 
 # Code structure
 
@@ -64,9 +72,33 @@ Such examples can be found separately in the respository [4most-4gp-scripts](htt
 
 # Installing 4GP
 
+For more complete instructions, visit the [Wiki](https://github.com/dcf21/4most-4gp/wiki/dependencies) on our GitHib page.
+
 ## Dependencies
 
-Before you start, you'll want to make sure you have all the dependencies you need to build Turbospectrum, 4FS, and the other tools that 4GP wraps. Under Ubuntu, the packages you need are as follows:
+Before you start, you need to have all the dependencies you need to build Turbospectrum, 4FS, and the other tools that 4GP wraps.
+
+4GP currently only runs on python 2.7.
+
+These packages and libraries are required:
+
+* *git* (required to check the code out from GitHub)
+* *SQLite3* (including the python-sqlite3 binding)
+* *python-tk* (required to use the 4GP Spectrum Browser and the Cannon)
+
+The following packages are strongly recommended:
+
+* *python-virtualenv* (required to set up a python virtual environment)
+
+The following packages are needed to run certain parts of 4GP:
+
+* *libchealpix-dev* (required to build and install 4FS)
+* *python-healpy* (required to build and install 4FS)
+* *libcfitsio3-dev* (required to build and install 4FS)
+* *gfortran* (required to build and install Turbospectrum)
+* *MySQL* (including the libmysqlclient and python-mysql bindings -- currently only required by the 4GP unit tests, so not very important)
+
+Under Ubuntu Linux, you can install all these packages with a single command, as follows:
 
 Ubuntu 16.04:
 
