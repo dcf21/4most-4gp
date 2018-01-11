@@ -83,8 +83,8 @@ Before you start, you need to have all the dependencies you need to build Turbos
 These packages and libraries are required:
 
 * *git* (required to check the code out from GitHub)
-* *SQLite3* (including the python-sqlite3 binding)
-* *python-tk* (required to use the 4GP Spectrum Browser and the Cannon)
+* *SQLite3* (including the python-sqlite3 binding; you can test for this by typing `import sqlite3` into a python terminal)
+* *python-tk* (required to use the 4GP Spectrum Browser and the Cannon; you can test for this by typing `import tkinter` into a python terminal)
 
 The following packages are strongly recommended:
 
@@ -97,6 +97,8 @@ The following packages are needed to run certain parts of 4GP:
 * *libcfitsio3-dev* (required to build and install 4FS)
 * *gfortran* (required to build and install Turbospectrum)
 * *MySQL* (including the libmysqlclient and python-mysql bindings -- currently only required by the 4GP unit tests, so not very important)
+
+## Ubuntu installation instructions
 
 Under Ubuntu Linux, you can install all these packages with a single command, as follows:
 
@@ -131,7 +133,7 @@ git clone https://github.com/dcf21/4most-4gp.git
 virtualenv virtualenv
 source virtualenv/bin/activate
 pip install numpy scipy astropy MySQL-python flask
-
+ 
 # Install 4GP code
 cd src/pythonModules/fourgp_speclib
 python setup.py install
