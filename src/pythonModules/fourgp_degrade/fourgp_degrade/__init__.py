@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 import logging
@@ -8,6 +8,7 @@ from warnings import simplefilter
 from .convolve import SpectrumConvolver
 from .interpolate import SpectrumInterpolator
 from .gaussian_noise import GaussianNoise
+from .redden import SpectrumReddener
 
 __version__ = "0.1.0"
 
