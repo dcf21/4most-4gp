@@ -58,6 +58,10 @@ class CannonInstance(object):
 
         assert isinstance(training_set, fourgp_speclib.SpectrumArray), \
             "Training set for the Cannon should be a SpectrumArray."
+
+        # Hook for normalising input spectra
+        training_set = self.normalise(training_set)
+
         self._training_set = training_set
         self._progress_bar = progress_bar
 
@@ -139,6 +143,9 @@ class CannonInstance(object):
         assert spectrum.raster_hash == self._training_set.raster_hash, \
             "Supplied spectrum for the Cannon to fit is not sampled on the same raster as the training set."
 
+        # Hook for normalising input spectra
+        spectrum = self.normalise(spectrum)
+
         inverse_variances = spectrum.value_errors ** (-2)
 
         # Ignore bad pixels.
@@ -153,6 +160,18 @@ class CannonInstance(object):
             full_output=True)
 
         return labels, cov, meta
+
+    def normalise(self, spectrum):
+        """
+        This is a hook for doing some kind of normalisation on spectra. Not implemented in this base class.
+
+        :param spectrum:
+            The spectrum to be normalised.
+        :return:
+            Normalised version of this spectrum.
+        """
+
+        return spectrum
 
     def save_model(self, filename, overwrite=True):
         """
@@ -184,6 +203,94 @@ class CannonInstance(object):
     def __repr__(self):
         return "<{0}.{1} object at {2}>".format(self.__module__,
                                                 type(self).__name__, hex(id(self)))
+
+
+class CannonInstanceWithRunningMeanNormalisation(CannonInstance):
+    """
+    A class which holds an instance of the Cannon, and automatically normalises the test spectra using a running mean
+    with a width of the certain number of pixels. This allows the Cannon to operate on spectra which have not been
+    continuum normalised.
+
+    The training and test spectra are both normalised in the same way.
+    """
+
+    def __init__(self, training_set, label_names, wavelength_arms, normalisation_window=300,
+                 censors=None, progress_bar=False, threads=None, tolerance=1e-4,
+                 load_from_file=None):
+        """
+        Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
+
+        :param training_set:
+            A SpectrumArray containing the spectra to train the Cannon on.
+
+        :param label_names:
+            A list of the names of the labels the Cannon is to estimate. We require that all of the training spectra
+            have metadata fields defining all of these labels.
+
+        :param wavelength_arms:
+            A list of the wavelength break-points between arms which should have continuum fitted separately.
+
+        :type wavelength_arms:
+            List of wavelengths in A.
+
+        :param normalisation_window:
+            The width of the running mean normalisation window.
+
+        :type normalisation_window:
+            int
+
+        :param threads:
+            The number of CPU cores we should use. If None, we look up how many cores this computer has.
+
+        :param tolerance:
+            The tolerance xtol which the method <scipy.optimize.fmin_powell> uses to determine convergence.
+
+        :param load_from_file:
+            The filename of the internal state of a pre-trained Cannon, which we should load rather than doing
+            training from scratch.
+        """
+
+        self._wavelength_arms = wavelength_arms
+        self._window_width = normalisation_window
+
+        # Initialise
+        super(CannonInstanceWithRunningMeanNormalisation, self).__init__(training_set=training_set,
+                                                                         label_names=label_names,
+                                                                         censors=censors,
+                                                                         progress_bar=progress_bar,
+                                                                         threads=threads,
+                                                                         tolerance=tolerance,
+                                                                         load_from_file=load_from_file
+                                                                         )
+
+    def normalise(self, spectrum):
+        """
+        This is a hook for doing some kind of normalisation on spectra. Not implemented in this base class.
+
+        :param spectrum:
+            The spectrum to be normalised.
+        :return:
+            Normalised version of this spectrum.
+        """
+
+        # If we're passed a spectrum array, normalise each spectrum in turn
+        if isinstance(spectrum, fourgp_speclib.SpectrumArray):
+            l = len(spectrum)
+            for i in range(l):
+                spectrum_item = spectrum.extract_item(i)
+                spectrum_normalised = self.normalise(spectrum_item)
+                spectrum_item.values[:] = spectrum_normalised.values
+                spectrum_item.value_errors[:] = spectrum_normalised.value_errors
+            return spectrum
+
+        assert isinstance(spectrum, fourgp_speclib.Spectrum), \
+            "The CannonInstance.normalise method requires a Spectrum object as input."
+
+        def running_mean(x, N):
+            cumsum = np.cumsum(np.insert(x, 0, 0))
+            return (cumsum[N:] - cumsum[:-N]) / float(N)
+
+        return spectrum
 
 
 class CannonInstanceWithContinuumNormalisation(CannonInstance):
@@ -249,7 +356,7 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
                                                                        load_from_file=load_from_file
                                                                        )
 
-    def fit_spectrum_with_continuum(self, spectrum, debugging=False):
+    def fit_spectrum(self, spectrum, debugging=False):
         """
         Fit stellar labels to a spectrum which has not been continuum normalised.
 
