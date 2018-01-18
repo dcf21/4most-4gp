@@ -26,6 +26,9 @@ class SpectrumReddener(object):
         self._input = input_spectrum
 
     def redden(self, e_bv, r=3.1):
+        return self.deredden(-e_bv, r)
+
+    def deredden(self, e_bv, r=3.1):
         """
         Redden this spectrum.
 
@@ -108,7 +111,8 @@ class SpectrumReddener(object):
 
         output = Spectrum(wavelengths=self._input.wavelengths,
                           values=self._input.values * multiplier,
-                          value_errors=self._input.value_errors * multiplier
+                          value_errors=self._input.value_errors * multiplier,
+                          metadata=self._input.metadata.copy()
                           )
 
         if self._input.mask_set:

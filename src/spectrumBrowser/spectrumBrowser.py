@@ -48,15 +48,16 @@ def library_index():
     # For each library, look up how many spectra are inside it, and create a dictionary of properties
     library_info = []
     for item in libraries:
-        name = os_path.split(item)[1]
-        x = SpectrumLibrarySqlite(path=item)
-        library_info.append({
-            'name': name,
-            'url': url_for('library_search', library=name),
-            'item_count': len(x.search())
-        })
-        x.close()
-        del x
+        if os_path.isdir(item):
+            name = os_path.split(item)[1]
+            x = SpectrumLibrarySqlite(path=item)
+            library_info.append({
+                'name': name,
+                'url': url_for('library_search', library=name),
+                'item_count': len(x.search())
+            })
+            x.close()
+            del x
 
     # Render list of SpectrumLibraries into HTML
     return render_template('index.html', path=args.path, libraries=library_info)
@@ -100,7 +101,7 @@ def library_search(library):
             # Create a new numeric metadata constraint
             if not string_constraint:
                 constraints[item] = ((lower_limit_float, upper_limit_float) if lower_limit_float != upper_limit_float
-                                     else lower_limit_float)
+                else lower_limit_float)
 
             # Create a new string metadata constraint
             else:
