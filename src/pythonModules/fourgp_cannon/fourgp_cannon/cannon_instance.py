@@ -286,11 +286,47 @@ class CannonInstanceWithRunningMeanNormalisation(CannonInstance):
         assert isinstance(spectrum, fourgp_speclib.Spectrum), \
             "The CannonInstance.normalise method requires a Spectrum object as input."
 
-        def running_mean(x, N):
-            cumsum = np.cumsum(np.insert(x, 0, 0))
-            return (cumsum[N:] - cumsum[:-N]) / float(N)
+        # Returns an array of length len(x)-(N-1)
+        def running_mean(x, n):
+            cumulative_sum = np.cumsum(np.insert(x, 0, 0))
+            return (cumulative_sum[n:] - cumulative_sum[:-n]) / float(n)
 
-        return spectrum
+        # Work out the raster of pixels inside each wavelength arm
+        logger.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
+        raster = spectrum.wavelengths
+        lower_cut = 0
+        arm_rasters = []
+        for break_point in self._wavelength_arms:
+            arm_rasters.append((raster >= lower_cut) * (raster < break_point))
+            lower_cut = break_point
+        arm_rasters.append(raster >= lower_cut)
+
+        output_wavelengths = []
+        output_values = []
+        output_value_errors = []
+
+        for arm in arm_rasters:
+            output_wavelengths.append(raster[arm])
+            input_values = spectrum.values[arm]
+            input_errors = spectrum.value_errors[arm]
+
+            normalisation = running_mean(spectrum.values, self._window_width)
+            padding_needed = len(input_values) - len(normalisation)
+            padding_left = int(padding_needed/2)
+            padding_right = padding_needed - padding_left
+            normalisation_full = np.concatenate([np.repeat(normalisation[0], padding_left),
+                                                 normalisation,
+                                                 np.repeat(normalisation[-1], padding_right)
+                                                 ])
+
+            output_values.append( input_values / normalisation_full)
+            output_value_errors.append(input_errors / normalisation_full)
+
+        output = fourgp_speclib.Spectrum(wavelengths=np.concatenate(output_wavelengths),
+                                         values=np.concatenate(output_values),
+                                         value_errors=np.concatenate(output_value_errors),
+                                         metadata=spectrum.metadata)
+        return output
 
 
 class CannonInstanceWithContinuumNormalisation(CannonInstance):
