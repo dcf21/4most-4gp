@@ -31,7 +31,8 @@ class CannonInstance(object):
     loaded from 4GP SpectrumLibrary objects.
     """
 
-    def __init__(self, training_set, label_names, censors=None, progress_bar=False, threads=None, tolerance=1e-4,
+    def __init__(self, training_set, label_names, wavelength_arms=None,
+                 censors=None, progress_bar=False, threads=None, tolerance=1e-4,
                  load_from_file=None):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
@@ -42,6 +43,10 @@ class CannonInstance(object):
         :param label_names:
             A list of the names of the labels the Cannon is to estimate. We require that all of the training spectra
             have metadata fields defining all of these labels.
+
+        :param wavelength_arms:
+            A list of the wavelength break-points between arms which should have continuum fitted separately. For
+            compatibility we accept this argument, but it is not used for continuum-normalised spectra.
 
         :param threads:
             The number of CPU cores we should use. If None, we look up how many cores this computer has.
@@ -340,7 +345,8 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
     you should continuum normalise spectra yourself and use the CannonInstance class instead.
     """
 
-    def __init__(self, training_set, label_names, wavelength_arms, continuum_model_family,
+    def __init__(self, training_set, label_names, wavelength_arms,
+                 continuum_model_family=fourgp_speclib.SpectrumPolynomial,
                  censors=None, progress_bar=False, threads=None, tolerance=1e-4,
                  load_from_file=None):
         """
@@ -510,4 +516,4 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
             if iteration >= max_iterations:
                 break
 
-        return labels, cov, meta, model, continuum_mask, continuum_model
+        return labels, cov, meta  # , model, continuum_mask, continuum_model

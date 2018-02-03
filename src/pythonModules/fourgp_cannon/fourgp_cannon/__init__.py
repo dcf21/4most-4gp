@@ -5,7 +5,10 @@ import logging
 from numpy import RankWarning
 from warnings import simplefilter
 
-from .cannon_instance import CannonInstance
+from .cannon_instance import \
+    CannonInstance, \
+    CannonInstanceWithContinuumNormalisation, \
+    CannonInstanceWithRunningMeanNormalisation
 
 __version__ = "0.1.0"
 
