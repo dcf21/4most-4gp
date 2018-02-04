@@ -33,7 +33,7 @@ class CannonInstance(object):
 
     def __init__(self, training_set, label_names, wavelength_arms=None,
                  censors=None, progress_bar=False, threads=None, tolerance=1e-4,
-                 load_from_file=None):
+                 load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
         
@@ -57,9 +57,18 @@ class CannonInstance(object):
         :param load_from_file:
             The filename of the internal state of a pre-trained Cannon, which we should load rather than doing
             training from scratch.
+
+        :param debugging:
+            Boolean flag determining whether we produce debugging output
+
+        :type debugging:
+            bool
         """
 
         self._debugging_output_counter = 0
+        self._debugging = debugging
+        self._wavelength_arms = wavelength_arms
+        logger.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
 
         assert isinstance(training_set, fourgp_speclib.SpectrumArray), \
             "Training set for the Cannon should be a SpectrumArray."
@@ -221,7 +230,7 @@ class CannonInstanceWithRunningMeanNormalisation(CannonInstance):
 
     def __init__(self, training_set, label_names, wavelength_arms, normalisation_window=300,
                  censors=None, progress_bar=False, threads=None, tolerance=1e-4,
-                 load_from_file=None):
+                 load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
 
@@ -253,19 +262,26 @@ class CannonInstanceWithRunningMeanNormalisation(CannonInstance):
         :param load_from_file:
             The filename of the internal state of a pre-trained Cannon, which we should load rather than doing
             training from scratch.
+
+        :param debugging:
+            Boolean flag determining whether we produce debugging output
+
+        :type debugging:
+            bool
         """
 
-        self._wavelength_arms = wavelength_arms
         self._window_width = normalisation_window
 
         # Initialise
         super(CannonInstanceWithRunningMeanNormalisation, self).__init__(training_set=training_set,
                                                                          label_names=label_names,
+                                                                         wavelength_arms=wavelength_arms,
                                                                          censors=censors,
                                                                          progress_bar=progress_bar,
                                                                          threads=threads,
                                                                          tolerance=tolerance,
-                                                                         load_from_file=load_from_file
+                                                                         load_from_file=load_from_file,
+                                                                         debugging=debugging
                                                                          )
 
     def normalise(self, spectrum):
@@ -291,13 +307,15 @@ class CannonInstanceWithRunningMeanNormalisation(CannonInstance):
         assert isinstance(spectrum, fourgp_speclib.Spectrum), \
             "The CannonInstance.normalise method requires a Spectrum object as input."
 
+        if self._debugging:
+            self._debugging_output_counter += 1
+
         # Returns an array of length len(x)-(N-1)
         def running_mean(x, n):
             cumulative_sum = np.cumsum(np.insert(x, 0, 0))
             return (cumulative_sum[n:] - cumulative_sum[:-n]) / float(n)
 
         # Work out the raster of pixels inside each wavelength arm
-        logger.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
         raster = spectrum.wavelengths
         lower_cut = 0
         arm_rasters = []
@@ -331,6 +349,12 @@ class CannonInstanceWithRunningMeanNormalisation(CannonInstance):
                                          values=np.concatenate(output_values),
                                          value_errors=np.concatenate(output_value_errors),
                                          metadata=spectrum.metadata)
+
+        # Produce debugging output if requested
+        if self._debugging:
+            np.savetxt("/tmp/debug_{:06d}.txt".format(self._debugging_output_counter),
+                       np.transpose([raster, spectrum.values, spectrum.value_errors]))
+
         return output
 
 
@@ -348,7 +372,7 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
     def __init__(self, training_set, label_names, wavelength_arms,
                  continuum_model_family=fourgp_speclib.SpectrumPolynomial,
                  censors=None, progress_bar=False, threads=None, tolerance=1e-4,
-                 load_from_file=None):
+                 load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
 
@@ -380,25 +404,32 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
         :param load_from_file:
             The filename of the internal state of a pre-trained Cannon, which we should load rather than doing
             training from scratch.
+
+        :param debugging:
+            Boolean flag determining whether we produce debugging output
+
+        :type debugging:
+            bool
         """
 
         assert issubclass(continuum_model_family, fourgp_speclib.SpectrumSmooth), \
             "Input continuum model family must be a subclass of <SpectrumSmooth>."
 
-        self._wavelength_arms = wavelength_arms
         self._continuum_model_family = continuum_model_family
 
         # Initialise
         super(CannonInstanceWithContinuumNormalisation, self).__init__(training_set=training_set,
                                                                        label_names=label_names,
+                                                                       wavelength_arms=wavelength_arms,
                                                                        censors=censors,
                                                                        progress_bar=progress_bar,
                                                                        threads=threads,
                                                                        tolerance=tolerance,
-                                                                       load_from_file=load_from_file
+                                                                       load_from_file=load_from_file,
+                                                                       debugging=debugging
                                                                        )
 
-    def fit_spectrum(self, spectrum, debugging=False):
+    def fit_spectrum(self, spectrum):
         """
         Fit stellar labels to a spectrum which has not been continuum normalised.
 
@@ -407,12 +438,6 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
 
         :type spectrum:
             Spectrum
-
-        :param debugging:
-            Boolean flag determining whether we produce debugging output
-
-        :type debugging:
-            bool
 
         :return:
         """
@@ -423,14 +448,13 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
         assert spectrum.raster_hash == self._training_set.raster_hash, \
             "Supplied spectrum for the Cannon to fit is not sampled on the same raster as the training set."
 
-        if debugging:
+        if self._debugging:
             self._debugging_output_counter += 1
 
         # Fitting tolerances
         max_iterations = 20  # Iterate a maximum number of times
 
         # Work out the raster of pixels inside each wavelength arm
-        logger.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
         raster = spectrum.wavelengths
         lower_cut = 0
         arm_rasters = []
@@ -506,7 +530,7 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
             logger.info("Best-fit labels: {}".format(list(labels[0])))
 
             # Produce debugging output if requested
-            if debugging:
+            if self._debugging:
                 np.savetxt("/tmp/debug_{:06d}_{:03d}.txt".format(self._debugging_output_counter, iteration),
                            np.transpose([raster, spectrum.values, spectrum.value_errors,
                                          continuum_model.values, model.values, continuum_mask])
@@ -516,4 +540,4 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
             if iteration >= max_iterations:
                 break
 
-        return labels, cov, meta  # , model, continuum_mask, continuum_model
+        return labels, cov, meta
