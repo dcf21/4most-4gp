@@ -315,16 +315,16 @@ class CannonInstanceWithRunningMeanNormalisation(CannonInstance):
             input_values = spectrum.values[arm]
             input_errors = spectrum.value_errors[arm]
 
-            normalisation = running_mean(spectrum.values, self._window_width)
+            normalisation = running_mean(input_values, self._window_width)
             padding_needed = len(input_values) - len(normalisation)
-            padding_left = int(padding_needed/2)
+            padding_left = int(padding_needed / 2)
             padding_right = padding_needed - padding_left
             normalisation_full = np.concatenate([np.repeat(normalisation[0], padding_left),
                                                  normalisation,
                                                  np.repeat(normalisation[-1], padding_right)
                                                  ])
 
-            output_values.append( input_values / normalisation_full)
+            output_values.append(input_values / normalisation_full)
             output_value_errors.append(input_errors / normalisation_full)
 
         output = fourgp_speclib.Spectrum(wavelengths=np.concatenate(output_wavelengths),
