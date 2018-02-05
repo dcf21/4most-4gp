@@ -107,22 +107,19 @@ class CannonInstance(object):
                                           rows=[[training_set.get_metadata(index)[label] for label in label_names]
                                                 for index in range(len(training_set))])
 
-        self._model = tc.L1RegularizedCannonModel(labelled_set=training_label_values,
-                                                  normalized_flux=training_set.values,
-                                                  normalized_ivar=inverse_variances,
-                                                  dispersion=training_set.wavelengths,
-                                                  threads=threads)
+        self._model = tc.CannonModel(labelled_set=training_label_values,
+                                     normalized_flux=training_set.values,
+                                     normalized_ivar=inverse_variances,
+                                     dispersion=training_set.wavelengths,
+                                     threads=threads)
 
-        self._model.vectorizer = tc.vectorizer.NormalizedPolynomialVectorizer(
-            labelled_set=training_label_values,
-            terms=tc.vectorizer.polynomial.terminator(label_names, 2)
+        self._model.vectorizer = tc.vectorizer.PolynomialVectorizer(
+            label_names=label_names,
+            order=2
         )
 
         if censors is not None:
             self._model.censors = censors
-
-        self._model.s2 = 0
-        self._model.regularization = 0
 
         if load_from_file is None:
             logger.info("Starting to train the Cannon")
@@ -136,7 +133,7 @@ class CannonInstance(object):
             logger.info("Loading Cannon from disk")
             self._model.load(filename=load_from_file)
             logger.info("Cannon loaded successfully")
-        self._model._set_s2_by_hogg_heuristic()
+        # self._model._set_s2_by_hogg_heuristic()
 
     def fit_spectrum(self, spectrum):
         """
