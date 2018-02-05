@@ -1,9 +1,12 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
+import sys
+from contextlib import contextmanager
 import numpy as np
 from multiprocessing import cpu_count
 import logging
+from astropy.table import Table
 import thecannon as tc
 
 import fourgp_speclib
@@ -12,17 +15,16 @@ from fourgp_degrade import SpectrumInterpolator
 logger = logging.getLogger(__name__)
 
 
-# This is a drop-in replacement for astropy Tables. Astropy is a bit of a pain to install on lunarc because it needs
-# cfitsio, so this saves a lot of trouble...
-def dcf_table(names, rows):
-    dtypes = [(str(i), np.float64) for i in names]
-
-    # Numpy breaks with some incomprehensible error message "expected a readable buffer object" if it doesn't
-    # receive a list of tuples...
-    data = [tuple(i) for i in rows]
-
-    output = np.array(data, dtype=dtypes)
-    return output
+@contextmanager
+def suppress_stdout(allow_progressbar):
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        if not allow_progressbar:
+            sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
 
 
 class CannonInstance(object):
@@ -103,37 +105,32 @@ class CannonInstance(object):
                     label, index, metadata)
 
         # Compile table of training values of labels from metadata contained in SpectrumArray
-        training_label_values = dcf_table(names=label_names,
-                                          rows=[[training_set.get_metadata(index)[label] for label in label_names]
-                                                for index in range(len(training_set))])
+        training_label_values = Table(names=label_names,
+                                      rows=[[training_set.get_metadata(index)[label] for label in label_names]
+                                            for index in range(len(training_set))])
 
-        self._model = tc.CannonModel(labelled_set=training_label_values,
-                                     normalized_flux=training_set.values,
-                                     normalized_ivar=inverse_variances,
+        self._model = tc.CannonModel(training_set_labels=training_label_values,
+                                     training_set_flux=training_set.values,
+                                     training_set_ivar=inverse_variances,
                                      dispersion=training_set.wavelengths,
-                                     threads=threads)
-
-        self._model.vectorizer = tc.vectorizer.PolynomialVectorizer(
-            label_names=label_names,
-            order=2
-        )
-
-        if censors is not None:
-            self._model.censors = censors
+                                     vectorizer=tc.vectorizer.PolynomialVectorizer(
+                                         label_names=label_names,
+                                         order=2
+                                     ),
+                                     censors=censors)
 
         if load_from_file is None:
             logger.info("Starting to train the Cannon")
-            self._model.train(
-                progressbar=self._progress_bar,
-                op_kwargs={'xtol': tolerance, 'ftol': tolerance},
-                op_bfgs_kwargs={}
-            )
+            with suppress_stdout(self._progress_bar):
+                self._model.train(op_kwargs={'xtol': tolerance, 'ftol': tolerance},
+                                  op_bfgs_kwargs={},
+                                  threads=threads
+                                  )
             logger.info("Cannon training completed")
         else:
             logger.info("Loading Cannon from disk")
-            self._model.load(filename=load_from_file)
+            self._model.read(path=load_from_file)
             logger.info("Cannon loaded successfully")
-        # self._model._set_s2_by_hogg_heuristic()
 
     def fit_spectrum(self, spectrum):
         """
@@ -164,11 +161,10 @@ class CannonInstance(object):
         inverse_variances[bad] = 0
         spectrum.values[bad] = np.nan
 
-        labels, cov, meta = self._model.fit(
-            normalized_flux=spectrum.values,
-            normalized_ivar=inverse_variances,
-            progressbar=False,
-            full_output=True)
+        with suppress_stdout(self._progress_bar):
+            labels, cov, meta = self._model.test(
+                flux=spectrum.values,
+                ivar=inverse_variances)
 
         return labels, cov, meta
 
@@ -203,9 +199,9 @@ class CannonInstance(object):
         :return:
             None
         """
-        self._model.save(filename=filename,
-                         include_training_data=False,
-                         overwrite=overwrite)
+        self._model.write(path=filename,
+                          include_training_set_spectra=False,
+                          overwrite=overwrite)
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,
@@ -514,11 +510,11 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
             cn_spectrum = spectrum / continuum_model
 
             # Run the Cannon
-            labels, cov, meta = self.fit_spectrum(spectrum=cn_spectrum)
+            labels, cov, meta = super(CannonInstanceWithContinuumNormalisation, self).fit_spectrum(spectrum=cn_spectrum)
 
             # Fetch the Cannon's model spectrum
             model = fourgp_speclib.Spectrum(wavelengths=raster,
-                                            values=self._model.predict(labels=labels)[0],
+                                            values=self._model(labels=labels),
                                             value_errors=np.zeros_like(raster))
 
             # Make new model of which pixels are continuum (based on Cannon's template being close to one)
