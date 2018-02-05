@@ -4,7 +4,7 @@
 import numpy as np
 from multiprocessing import cpu_count
 import logging
-import AnniesLasso as tc
+import thecannon as tc
 
 import fourgp_speclib
 from fourgp_degrade import SpectrumInterpolator
