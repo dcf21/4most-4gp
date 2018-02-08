@@ -10,6 +10,7 @@ This is useful for crudely modelling continuum. To produce a continuum-normalise
 """
 
 import numpy as np
+from math import pi, sin, cos, acos
 import logging
 from scipy.optimize import least_squares
 
@@ -155,7 +156,7 @@ class SpectrumSmoothFactory:
         # roughly fit the template to the observed spectrum
         norm_factor = np.median(
             other.values[(other.wavelengths > lambda_min_norm) & (other.wavelengths < lambda_max_norm)])
-        coefficients_initial = np.asarray((norm_factor,) + (0,) * (self._terms-1))
+        coefficients_initial = np.asarray((norm_factor,) + (0,) * (self._terms - 1))
 
         result = least_squares(error_func, coefficients_initial, args=(other_wavelengths_masked,
                                                                        other_values_masked,
@@ -216,7 +217,7 @@ class SpectrumSmoothFactory:
                             other_values_masked_ - output.evaluate_function(other_wavelengths_masked_, coefficients)
                     ) / other_value_errors_masked_)
 
-        coefficients_initial = np.asarray((1,) + (0,) * (self._terms-1))
+        coefficients_initial = np.asarray((1,) + (0,) * (self._terms - 1))
 
         result = least_squares(error_func, coefficients_initial, args=(other_wavelengths_masked,
                                                                        other_values_masked,
@@ -375,5 +376,58 @@ class SpectrumPolynomial(SpectrumSmooth):
         for order in range(1, self._terms + 1):
             output *= raster
             output += coefficients[-order]
+
+        return output
+
+
+class SpectrumChebyshev(SpectrumSmooth):
+    """
+    A class implementing a Chebyshev polynomial spectrum.
+    """
+
+    def evaluate_function(self, raster, coefficients):
+        """
+        Evaluate Chebyshev polynomial at every point on wavelength raster.
+        :return:
+            None
+        """
+        x_min = raster[0]
+        x_max = raster[-1]
+
+        raster_normed = 2 * (raster - x_min) / (x_max - x_min) - 1  # Projects raster into range -1 to 1
+
+        output = np.zeros_like(raster, dtype=np.float64)
+        coefficients = np.asarray(coefficients, dtype=np.float64)
+
+        # Trigonometric definition of Chebyshev polynomial, https://en.wikipedia.org/wiki/Chebyshev_polynomials
+        for order in range(1, self._terms + 1):
+            output += coefficients[order - 1] * cos(order * acos(raster_normed))
+
+        return output
+
+
+class SpectrumSinesAndCosines(SpectrumSmooth):
+    """
+    A class implementing a spectrum comprising sines and cosines.
+    """
+
+    def evaluate_function(self, raster, coefficients):
+        """
+        Evaluate spectrum comprising sines and cosines at every point on wavelength raster.
+        :return:
+            None
+        """
+        x_min = raster[0]
+        x_max = raster[-1]
+
+        raster_normed = 2 * pi * (raster - x_min) / (x_max - x_min)  # Projects raster into range 0 to 2pi
+
+        output = np.zeros_like(raster, dtype=np.float64)
+        coefficients = np.asarray(coefficients, dtype=np.float64)
+
+        for order in range(1, self._terms + 1):
+            parity = order % 2  # ... 1  0  1  0  1  0  1
+            scale = int(order / 2)  # 0  1  1  2  2  3  3
+            output += coefficients[order - 1] * (cos if parity else sin)(scale * raster_normed)
 
         return output
