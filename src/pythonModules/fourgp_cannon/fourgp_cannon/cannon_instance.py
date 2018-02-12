@@ -130,7 +130,7 @@ class CannonInstance(object):
             logger.info("Cannon training completed")
         else:
             logger.info("Loading Cannon from disk")
-            self._model.read(path=load_from_file)
+            self._model = self._model.read(path=load_from_file)
             logger.info("Cannon loaded successfully")
 
     def fit_spectrum(self, spectrum):
