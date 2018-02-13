@@ -55,7 +55,7 @@ class FourFS:
         self.metadata_store = {}
 
         if snr_list is None:
-            snr_list = (10, 20, 50, 80, 100, 130, 180, 250, 5000)
+            snr_list = (10, 20, 50, 80, 100, 130, 180, 250, 500)
         self.snr_list = snr_list
 
         if snr_definitions is None:
@@ -178,7 +178,7 @@ class FourFS:
         hdu_1.header['CDELT1'] = delta_lambda
         hdu_1.header['CUNIT1'] = "Angstrom"
         hdu_1.header['BUNIT'] = "erg/s/cm2/Angstrom"
-        hdu_1.header['ABMAG'] = magnitude
+        hdu_1.header['ABMAG'] = 15.0
         if resolution is not None:
             fwhm_res = np.mean(wavelength_raster / resolution)
             hdu_1.header['RESOLUTN'] = fwhm_res
@@ -250,13 +250,13 @@ class FourFS:
                         snr, snr_definition,
                         os_path.join(self.tmp_dir, 'template_{}.fits'.format(self.template_counter)),
                         'goodSNR{0:.1f}_{1:s}'.format(snr, snr_definition),
-                        '0.0', '0.0', '15.0', '15.0')
+                        '0.0', '0.0', '15', self.magnitude)
 
             # Additionally, run 4FS on a continuum-only spectrum at a high SNR of 250
             writestr += 'template_{}_c {} {} {} {} {} {}\n'.format(
                 self.template_counter,
                 os_path.join(self.tmp_dir, 'template_{}_c.fits'.format(self.template_counter)),
-                'goodSNR250c', '0.0', '0.0', '15.0', '15.0')
+                'goodSNR250c', '0.0', '0.0', '15', self.magnitude)
 
             # Populate star_list with the list of FITS files we're expecting 4FS to produce
             for snr in self.snr_list:
