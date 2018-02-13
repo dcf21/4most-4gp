@@ -221,7 +221,7 @@ DCFSNR        SNR MEDIAN DIV   1.0  618.0 668.0 NM     1.0    PIX
 def ruleset(snr_list, snr_definitions):
     output = """
 #NAME       REQUIRED_VALUE EXPRESSION
-goodSNR2500 2500.0         DCFSNR
+goodSNR250c 250.0          DCFSNR
 """
 
     for snr_definition in snr_definitions:

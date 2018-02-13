@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 class FourFS:
     def __init__(self,
                  path_to_4fs="/home/dcf21/iwg7_pipeline/OpSys/ETC",
+                 magnitude=15,
                  snr_list=None,
                  snr_definitions=None,
                  lrs_use_snr_definitions=None,
@@ -31,6 +32,9 @@ class FourFS:
 
         :param path_to_4fs:
             Path to where 4FS binaries can be found.
+
+        :param magnitude:
+            The SDSS r' band of this template spectrum.
 
         :param snr_list:
             List of the SNRs that we want 4FS to degrade input spectra to.
@@ -46,6 +50,7 @@ class FourFS:
             List of three SNR definitions to use for the red, green and blue bands of 4MOST HRS.
         """
         self.path_to_4fs = path_to_4fs
+        self.magnitude = magnitude
         self.template_counter = 0
         self.metadata_store = {}
 
@@ -155,7 +160,7 @@ class FourFS:
         flux = input_spectrum.values
         continuum_normalised_flux = input_spectrum_continuum_normalised.values
 
-        magnitude = 12.0
+        magnitude = float(self.magnitude)
         lambda_min = np.min(wavelength_raster)
         delta_lambda = wavelength_raster[1] - wavelength_raster[0]
 
@@ -251,7 +256,7 @@ class FourFS:
             writestr += 'template_{}_c {} {} {} {} {} {}\n'.format(
                 self.template_counter,
                 os_path.join(self.tmp_dir, 'template_{}_c.fits'.format(self.template_counter)),
-                'goodSNR2500', '0.0', '0.0', '15.0', '15.0')
+                'goodSNR250c', '0.0', '0.0', '15.0', '15.0')
 
             # Populate star_list with the list of FITS files we're expecting 4FS to produce
             for snr in self.snr_list:
@@ -321,10 +326,34 @@ class FourFS:
         # SNR definitions are red, green, blue. But we index the bands (blue, green, red).
         snr_definitions = snr_definitions[::-1]
 
+        # Extract exposure times from 4FS summary file
+        exposure_times = {}
+        with open(os_path.join(path, '4FS_ETC_summary.txt')) as f:
+            for line in f:
+                words = line.split()
+                if len(words) < 6:
+                    continue
+
+                # First column of data file lists the run number
+                try:
+                    run_counter = int(words[0])
+                except ValueError:
+                    continue
+                # Sixth column is exposure time in seconds
+                if words[5]=="nan":
+                    t_exposure = np.nan
+                else:
+                    t_exposure = float(words[5])
+                exposure_times[str(run_counter)] = t_exposure
+
+        # Start extracting spectra from FITS files
         output = {}
+        run_counter = 0
         for i in template_numbers:
             output[i] = {}
             for snr in self.snr_list:
+                run_counter += 1
+
                 # Load in the three output spectra -- blue, green, red arms
                 d = []
                 for j, band in enumerate(bands):
@@ -408,6 +437,8 @@ class FourFS:
                 metadata = self.metadata_store[i]
                 metadata['continuum_normalised'] = 0
                 metadata['SNR'] = float(snr)
+                metadata['magnitude'] = float(self.magnitude)
+                metadata['exposure'] = exposure_times.get(str(run_counter), np.nan)
                 spectrum = Spectrum(wavelengths=wavelengths_final,
                                     values=fluxes_final,
                                     value_errors=fluxes_final / snrs_final,
