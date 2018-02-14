@@ -51,6 +51,7 @@ class FourFS:
         """
         self.path_to_4fs = path_to_4fs
         self.magnitude = magnitude
+        self.reference_magnitude = 15.0  # Give all spectra to 4FS normalised to this reference mag in SDSS_r
         self.template_counter = 0
         self.metadata_store = {}
 
@@ -160,17 +161,25 @@ class FourFS:
         flux = input_spectrum.values
         continuum_normalised_flux = input_spectrum_continuum_normalised.values
 
-        magnitude = float(self.magnitude)
         lambda_min = np.min(wavelength_raster)
         delta_lambda = wavelength_raster[1] - wavelength_raster[0]
 
         if not continuum_only:
-            # Apply some normalisation to input flux levels
-            data = flux * 10E-15 / max(flux)
+            data = flux
         else:
             # If we only want continuum, without lines, then divide by continuum_normalised flux
-            data = (flux * 10E-15 / max(flux)) / continuum_normalised_flux
+            data = flux / continuum_normalised_flux
 
+        fits_spectrum = Spectrum(wavelengths=wavelength_raster,
+                                 values=data,
+                                 value_errors=np.zeros_like(wavelength_raster),
+                                 metadata={})
+
+        # Renormalise spectrum to a standard R-band magnitude
+        magnitude = fits_spectrum.photometry("SDSS_r")
+        data *= pow(10, -2.5*(self.reference_magnitude - magnitude))
+
+        # Turn spectrum into a fits file
         hdu_1 = fits.PrimaryHDU(data)
         hdu_1.header['CRTYPE1'] = "LINEAR  "
         hdu_1.header['CRPIX1'] = 1.0
@@ -178,7 +187,7 @@ class FourFS:
         hdu_1.header['CDELT1'] = delta_lambda
         hdu_1.header['CUNIT1'] = "Angstrom"
         hdu_1.header['BUNIT'] = "erg/s/cm2/Angstrom"
-        hdu_1.header['ABMAG'] = 15.0
+        hdu_1.header['ABMAG'] = self.reference_magnitude
         if resolution is not None:
             fwhm_res = np.mean(wavelength_raster / resolution)
             hdu_1.header['RESOLUTN'] = fwhm_res
@@ -250,13 +259,13 @@ class FourFS:
                         snr, snr_definition,
                         os_path.join(self.tmp_dir, 'template_{}.fits'.format(self.template_counter)),
                         'goodSNR{0:.1f}_{1:s}'.format(snr, snr_definition),
-                        '0.0', '0.0', '15', self.magnitude)
+                        '0.0', '0.0', self.reference_magnitude, self.magnitude)
 
             # Additionally, run 4FS on a continuum-only spectrum at a high SNR of 250
             writestr += 'template_{}_c {} {} {} {} {} {}\n'.format(
                 self.template_counter,
                 os_path.join(self.tmp_dir, 'template_{}_c.fits'.format(self.template_counter)),
-                'goodSNR250c', '0.0', '0.0', '15', self.magnitude)
+                'goodSNR250c', '0.0', '0.0', self.reference_magnitude, self.magnitude)
 
             # Populate star_list with the list of FITS files we're expecting 4FS to produce
             for snr in self.snr_list:
