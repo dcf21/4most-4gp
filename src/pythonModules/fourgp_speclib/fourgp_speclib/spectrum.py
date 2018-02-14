@@ -304,6 +304,37 @@ class Spectrum(object):
 
         return scipy.integrate.trapz(x=self.wavelengths, y=self.values)
 
+    def photometry(self, band):
+        """
+        Evaluate photometry in a named photometric band, using pyphot.
+
+        :param band:
+            Name of photometric band, as recognised by pyphot. See
+            <http://mfouesneau.github.io/docs/pyphot/libcontent.html> for a list of recognised bands.
+
+        :type band:
+            str
+
+        :return:
+            float AB magnitude
+        """
+
+        import pyphot, tables
+        lib = pyphot.get_library()
+
+        try:
+            photometer = lib[band]
+        except tables.exceptions.NoSuchNodeError:
+            logger.error("Could not find photometric band <{}>".format(band))
+            raise
+
+        wavelengths = self.wavelengths * pyphot.unit['AA']
+        fluxes = self.values * pyphot.unit['erg/s/cm**2/AA']
+
+        flux = photometer.get_flux(slamb=wavelengths, sflux=fluxes)
+        mag = -2.5 * np.log10(flux) - photometer.AB_zero_mag
+        return mag
+
     def apply_redshift(self, z):
         """
         Apply a redshift of z to this spectrum, and return a new Spectrum object.

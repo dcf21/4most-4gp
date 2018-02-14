@@ -96,6 +96,7 @@ The following packages are needed to run certain parts of 4GP:
 * *python-healpy* (required to build and install 4FS)
 * *libcfitsio3-dev* (required to build and install 4FS)
 * *gfortran* (required to build and install Turbospectrum)
+* *pyphot* (required to do photometry on spectra)
 * *MySQL* (including the libmysqlclient and python-mysql bindings -- currently only required by the 4GP unit tests, so not very important)
 
 ## Ubuntu installation instructions
@@ -132,7 +133,7 @@ git clone https://github.com/dcf21/4most-4gp.git
 # Set up a python virtual environment
 virtualenv virtualenv
 source virtualenv/bin/activate
-pip install numpy scipy astropy MySQL-python flask
+pip install numpy scipy astropy MySQL-python flask tables
  
 # Install 4GP code
 cd src/pythonModules/fourgp_speclib
@@ -166,9 +167,32 @@ You will probably also want to install Turbospectrum and 4FS.
 
 Your 4GP installation will need to know the paths to these tools so that it can invoke them as required. You can configure search paths whenever you invoke the wrappers for these tools.
 
+
+### Installing the Cannon
+
+At the time of writing their are various branches of Annie's Lasso with different APIs. The following branch uses Andy Casey's latest development API, which is the one 4GP expects:
+
+```
+git clone https://github.com/dcf21/AnniesLasso.git
+cd AnniesLasso
+python setup.py install
+```
+
+### Installing pyphot
+
+The pyphot source code can be obtained from a GitHub repository. We maintain our own fork of the repository with branches labelled `release-2018-01-12-1`, etc, to indicate versions which are compatible with each release of 4GP.
+
+```
+git clone https://github.com/dcf21/pyphot.git
+cd pyphot
+python setup.py install
+```
+
 ### Installing Turbospectrum
 
-If you want to synthesize spectra using Turbospectrum, you need to do the following. Download the code, as follows:
+If you want to synthesize spectra using Turbospectrum, the following commands will download and install it for you.
+
+Download the code, as follows:
 
 ```
 wget http://www.pages-perso-bertrand-plez.univ-montp2.fr/DATA/Turbospectrum-v15.1.tar.gz
@@ -182,7 +206,7 @@ tar xvfz Turbospectrum-v15.1.tar.gz
 mv EXPORT-15.1 turbospectrum-15.1
 cd turbospectrum-15.1/exec-gf-v15.1/
 make
- 
+
 tar xvfz interpol_marcs.tar.gz
 cd interpol_marcs
 gfortran interpol_modeles.f -o interpol_modeles
@@ -202,16 +226,6 @@ make
 ```
 
 Note that the 4MOST GitLab account is password protected, so you will need to get your own account before you will be able to check out the code.
-
-### Installing the Cannon
-
-At the time of writing their are various branches of Annie's Lasso with different APIs. The following branch uses Andy Casey's latest development API, which is the one 4GP expects:
-
-```
-git checkout https://github.com/dcf21/AnniesLasso.git develop
-cd AnniesLasso
-python setup.py install
-```
 
 # Using the web-based spectrum browser
 
