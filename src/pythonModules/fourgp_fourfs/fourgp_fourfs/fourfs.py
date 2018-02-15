@@ -177,7 +177,7 @@ class FourFS:
 
         # Renormalise spectrum to a standard R-band magnitude
         magnitude = fits_spectrum.photometry("SDSS_r")
-        data *= pow(10, -2.5*(self.reference_magnitude - magnitude))
+        data *= pow(10, -0.4 * (self.reference_magnitude - magnitude))
 
         # Turn spectrum into a fits file
         hdu_1 = fits.PrimaryHDU(data)
@@ -349,7 +349,7 @@ class FourFS:
                 except ValueError:
                     continue
                 # Sixth column is exposure time in seconds
-                if words[5]=="nan":
+                if words[5] == "nan":
                     t_exposure = np.nan
                 else:
                     t_exposure = float(words[5])
@@ -444,10 +444,19 @@ class FourFS:
 
                 # Turn data into a 4GP Spectrum object
                 metadata = self.metadata_store[i]
+
+                # Add metadata about 4FS settings
                 metadata['continuum_normalised'] = 0
                 metadata['SNR'] = float(snr)
                 metadata['magnitude'] = float(self.magnitude)
                 metadata['exposure'] = exposure_times.get(str(run_counter), np.nan)
+
+                if (snr_definitions[0] == snr_definitions[1]) and (snr_definitions[1] == snr_definitions[2]):
+                    metadata['snr_definition'] = snr_definitions[0]
+                else:
+                    metadata['snr_definition'] = ",".join(snr_definitions)
+
+                # Insert spectrum into library
                 spectrum = Spectrum(wavelengths=wavelengths_final,
                                     values=fluxes_final,
                                     value_errors=fluxes_final / snrs_final,
