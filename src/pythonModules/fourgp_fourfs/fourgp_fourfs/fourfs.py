@@ -21,8 +21,11 @@ logger = logging.getLogger(__name__)
 class FourFS:
     def __init__(self,
                  path_to_4fs="/home/dcf21/iwg7_pipeline/OpSys/ETC",
-                 magnitude=15,
+                 magnitude=14,
+                 magnitude_unreddened=False,
+                 photometric_band="SDSS_r",
                  snr_list=None,
+                 snr_per_pixel=True,
                  snr_definitions=None,
                  lrs_use_snr_definitions=None,
                  hrs_use_snr_definitions=None
@@ -34,10 +37,21 @@ class FourFS:
             Path to where 4FS binaries can be found.
 
         :param magnitude:
-            The SDSS r' band of this template spectrum.
+            The magnitude to normalise this template spectrum to (only relevant for computing exposure times).
+
+        :param photometric_band:
+            The photometric band in which the magnitude of this template spectrum is quoted.
+
+        :param magnitude_unreddened:
+            Boolean flag, set to True if the magnitude above should be taken as the unreddened magnitude of the star.
+            This settings requires metadata fields such as 'A_SDSS_r' to be set in each spectrum's metadata by the
+            reddening script, so that we know how many magnitudes each photometric band has been reddened by.
 
         :param snr_list:
             List of the SNRs that we want 4FS to degrade input spectra to.
+
+        :param snr_per_pixel:
+            Boolean flag indicating whether SNRs are quoted per pixel or per Angstrom.
 
         :param snr_definitions:
             List of ways we define SNR. Each should take the form of a tuple (name,min,max), where we take the median
@@ -51,6 +65,9 @@ class FourFS:
         """
         self.path_to_4fs = path_to_4fs
         self.magnitude = magnitude
+        self.magnitude_unreddened = magnitude_unreddened
+        self.photometric_band = photometric_band
+        self.snr_per_pixel = snr_per_pixel
         self.reference_magnitude = 15.0  # Give all spectra to 4FS normalised to this reference mag in SDSS_r
         self.template_counter = 0
         self.metadata_store = {}
@@ -92,8 +109,9 @@ class FourFS:
         with open(os_path.join(self.tmp_dir, "rulelist.txt"), "w") as f:
             f.write(config_files.rulelist)
             for snr_definition in snr_definitions:
-                f.write("{:<13s} SNR MEDIAN DIV   1.0  {:.1f} {:.1f} NM     1.0    PIX\n".
-                        format(snr_definition[0], snr_definition[1] / 10., snr_definition[2] / 10.))
+                f.write("{:<13s} SNR MEDIAN DIV   1.0  {:.1f} {:.1f} NM     1.0    {}\n".
+                        format(snr_definition[0], snr_definition[1] / 10., snr_definition[2] / 10.,
+                               "PIX" if self.snr_per_pixel else "AA"))
 
         with open(os_path.join(self.tmp_dir, "ruleset.txt"), "w") as f:
             f.write(config_files.ruleset(snr_list=self.snr_list, snr_definitions=self.distinct_snr_definitions))
@@ -176,7 +194,11 @@ class FourFS:
                                  metadata={})
 
         # Renormalise spectrum to a standard R-band magnitude
-        magnitude = fits_spectrum.photometry("SDSS_r")
+        magnitude = fits_spectrum.photometry(self.photometric_band)
+
+        if self.magnitude_unreddened:
+            magnitude -= input_spectrum.metadata["A_{}".format(self.photometric_band)]
+
         data *= pow(10, -0.4 * (self.reference_magnitude - magnitude))
 
         # Turn spectrum into a fits file
@@ -448,6 +470,7 @@ class FourFS:
                 # Add metadata about 4FS settings
                 metadata['continuum_normalised'] = 0
                 metadata['SNR'] = float(snr)
+                metadata['SNR_per'] = "pixel" if self.snr_per_pixel else "A"
                 metadata['magnitude'] = float(self.magnitude)
                 metadata['exposure'] = exposure_times.get(str(run_counter), np.nan)
 
