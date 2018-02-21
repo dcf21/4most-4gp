@@ -10,6 +10,9 @@ from .cannon_instance import \
     CannonInstanceWithContinuumNormalisation, \
     CannonInstanceWithRunningMeanNormalisation
 
+from .cannon_instance_release_2018_01_09_1 import \
+    CannonInstance_2018_01_09
+
 __version__ = "0.1.0"
 
 logger = logging.getLogger(__name__)
