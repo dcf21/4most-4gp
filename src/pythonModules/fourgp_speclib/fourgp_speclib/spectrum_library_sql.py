@@ -275,7 +275,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         self._metadata_fields = []
         self._parameterised_query("SELECT fieldId, name FROM metadata_fields;")
         for item in self._db_cursor:
-            self._metadata_fields.append(item["name"])
+            self._metadata_fields.append(item[1])
 
     def _fetch_library_id(self, name, add_record=False):
         """
@@ -310,7 +310,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
                 "Attempting to access a library which doesn't exist in the database."
 
             if results:
-                return results[0]["libraryId"]
+                return results[0][0]
 
             # If not, add it into the database
             self._parameterised_query("INSERT INTO libraries (name) VALUES (?);", (name,))
@@ -337,7 +337,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             self._parameterised_query("SELECT originId FROM origins WHERE name=?;", (name,))
             results = self._db_cursor.fetchall()
             if results:
-                return results[0]["originId"]
+                return results[0][0]
 
             # If not, add it into the database
             self._parameterised_query("INSERT INTO origins (name) VALUES (?);", (name,))
@@ -363,7 +363,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             self._parameterised_query("SELECT fieldId FROM metadata_fields WHERE name=?;", (name,))
             results = self._db_cursor.fetchall()
             if results:
-                return results[0]["fieldId"]
+                return results[0][0]
 
             # If not, add it into the database
             self._parameterised_query("INSERT INTO metadata_fields (name) VALUES (?);", (name,))
@@ -395,7 +395,7 @@ SELECT specId FROM spectra WHERE libraryId={} AND filename IN ({});
 """.format(self._library_id, ",".join(filename_strings)))
 
         for item in self._db_cursor:
-            output.append(item["specId"])
+            output.append(item[0])
 
         assert len(output) == len(filenames), "Some of the requested filenames did not exist in database. " \
                                               "Matched {} of {} filenames.".format(len(output), len(filenames))
@@ -426,8 +426,39 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN (%s);
 """ % (self._library_id, ",".join(id_strings)))
 
         for item in self._db_cursor:
-            output.append(item["filename"])
+            output.append(item[0])
         return output
+
+    def __len__(self):
+        """
+        Return the number of spectra in this spectrum library.
+
+        :return:
+            int
+        """
+
+        # See if we have a cached count
+        try:
+            with open(os_path.join(self._path, "spectrum_count")) as f:
+                count = int(f.read())
+                return count
+        except (IOError, ValueError):
+            pass
+
+        # Calculate count
+        count = 0
+        self._parameterised_query("SELECT COUNT(1) FROM spectra;")
+        results = self._db_cursor.fetchall()
+        if results:
+            count = results[0][0]
+
+        # Cache count to file
+        with open(os_path.join(self._path, "spectrum_count"), "w") as f:
+            f.write(str(count))
+
+        # Return spectrum count
+        return count
+
 
     def purge(self):
         """
@@ -440,10 +471,14 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN (%s);
         # Delete spectra
         self._parameterised_query("SELECT filename FROM spectra WHERE libraryId=?;", (self._library_id,))
         for item in self._db_cursor:
-            os.unlink(os_path.join(self._path, item["filename"]))
+            os.unlink(os_path.join(self._path, item[0]))
 
         # Delete id files
         os.unlink(os_path.join(self._path, "library_props"))
+
+        # Delete cached spectrum count
+        if os.path.isfile(os_path.join(self._path, "spectrum_count")):
+            os.unlink(os_path.join(self._path, "spectrum_count"))
 
         # Delete database entries
         self._parameterised_query("DELETE FROM libraries WHERE libraryId=?;", (self._library_id,))
@@ -510,7 +545,7 @@ FROM spectra s
 INNER JOIN origins o ON s.originId = o.originId
 WHERE {} ORDER BY s.filename;""".format(" AND ".join(criteria))
         self._parameterised_query(query, criteria_params)
-        return self._db_cursor.fetchall()
+        return [ {"specId":x[0], "filename":x[1], "name":x[2]} for x in self._db_cursor.fetchall()]
 
     @requires_ids_or_filenames
     def get_metadata(self, ids=None, filenames=None):
@@ -557,11 +592,11 @@ WHERE i.libraryId=? AND i.specId=?;
 
             # Enter metadata into dictionary
             for entry in self._db_cursor:
-                key = str(entry["name"])  # Need str() here as SQL returns unicode strings
-                if entry["valueFloat"] is not None:
-                    item[key] = entry["valueFloat"]
+                key = str(entry[0])  # Need str() here as SQL returns unicode strings
+                if entry[1] is not None:
+                    item[key] = entry[1]
                 else:
-                    item[key] = entry["valueString"]
+                    item[key] = entry[2]
 
             output.append(item)
 
@@ -721,6 +756,10 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
         # Fetch the numerical id of the origin of these spectra
         origin_id = self._fetch_origin_id(origin)
 
+        # Delete cached spectrum count
+        if os.path.isfile(os_path.join(self._path, "spectrum_count")):
+            os.unlink(os_path.join(self._path, "spectrum_count"))
+
         # Insert each spectrum in turn
         for index, (filename_stub, metadata) in enumerate(zip(filenames, metadata_list)):
 
@@ -755,3 +794,9 @@ REPLACE INTO spectra (filename, originId, libraryId, importTime)
 
         # Commit changes into database
         self._db.commit()
+
+    def _parameterised_query(self, sql, parameters=None):
+        raise NotImplementedError
+
+    def _parameterised_query_many(self, sql, parameters=None):
+        raise NotImplementedError

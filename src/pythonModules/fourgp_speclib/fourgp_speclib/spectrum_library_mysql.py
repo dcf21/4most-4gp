@@ -136,7 +136,7 @@ class SpectrumLibraryMySql(SpectrumLibrarySql):
 
     def _open_database(self):
         self._db = MySQLdb.connect(host=self._db_host, user=self._db_user, passwd=self._db_passwd, db=self._db_name)
-        self._db_cursor = self._db.cursor(cursorclass=MySQLdb.cursors.DictCursor)
+        self._db_cursor = self._db.cursor(cursorclass=MySQLdb.cursors.Cursor)
         return self._db, self._db_cursor
 
     def _parameterised_query(self, sql, parameters=None):

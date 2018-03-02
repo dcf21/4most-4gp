@@ -54,7 +54,7 @@ def library_index():
             library_info.append({
                 'name': name,
                 'url': url_for('library_search', library=name),
-                'item_count': len(x.search())
+                'item_count': len(x)
             })
             x.close()
             del x
