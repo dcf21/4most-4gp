@@ -105,14 +105,17 @@ Under Ubuntu Linux, you can install all these packages with a single command, as
 Ubuntu 16.04:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk sqlite3 python-dev
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk python-matplotlib sqlite3 python-dev
 ```
 
 Ubuntu 14.04:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk sqlite3 python-dev
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk python-matplotlib sqlite3 python-dev
+apt-get build-dep python-matplotlib
 ```
+
+Note that owing to this issue described on [StackOverflow](https://stackoverflow.com/questions/17426087/why-pythonsqlite3-is-extremely-slow), the pipeline runs very slowly on Ubuntu 14.04.
 
 ## Installing 4GP in a python virtual environment
 
