@@ -105,13 +105,13 @@ Under Ubuntu Linux, you can install all these packages with a single command, as
 Ubuntu 16.04:
 
 ```
-apt-get install git python-sqlite3 mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk sqlite3 python-dev
 ```
 
 Ubuntu 14.04:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk sqlite3 python-dev
 ```
 
 ## Installing 4GP in a python virtual environment
@@ -132,7 +132,7 @@ git clone https://github.com/dcf21/4most-4gp.git
 # Set up a python virtual environment
 virtualenv virtualenv
 source virtualenv/bin/activate
-pip install numpy scipy astropy MySQL-python flask
+pip install numpy scipy astropy MySQL-python flask matplotlib tables
  
 # Install 4GP code
 cd src/pythonModules/fourgp_speclib
@@ -208,7 +208,7 @@ Note that the 4MOST GitLab account is password protected, so you will need to ge
 At the time of writing their are various branches of Annie's Lasso with different APIs. The following branch uses Andy Casey's latest development API, which is the one 4GP expects:
 
 ```
-git checkout https://github.com/dcf21/AnniesLasso.git develop
+git checkout https://github.com/dcf21/AnniesLasso.git
 cd AnniesLasso
 python setup.py install
 ```
