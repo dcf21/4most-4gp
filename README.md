@@ -84,7 +84,9 @@ These packages and libraries are required:
 
 * *git* (required to check the code out from GitHub)
 * *SQLite3* (including the python-sqlite3 binding; you can test for this by typing `import sqlite3` into a python terminal)
+* *python-matplotlib* (required to use the 4GP Spectrum Browser and the Cannon; you can test for this by typing `import matplotlib` into a python terminal)
 * *python-tk* (required to use the 4GP Spectrum Browser and the Cannon; you can test for this by typing `import tkinter` into a python terminal)
+* *pyxplot* (required to produce plots of the Cannon's performance)
 
 The following packages are strongly recommended:
 
@@ -106,18 +108,17 @@ Under Ubuntu Linux, you can install all these packages with a single command, as
 Ubuntu 16.04:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk python-matplotlib sqlite3 python-dev
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk python-matplotlib sqlite3 python-dev pyxplot
 ```
 
 Ubuntu 14.04:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk python-matplotlib sqlite3 python-dev
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk python-matplotlib sqlite3 python-dev pyxplot
 apt-get build-dep python-matplotlib
 ```
 
 Note that owing to this issue described on [StackOverflow](https://stackoverflow.com/questions/17426087/why-pythonsqlite3-is-extremely-slow), the pipeline runs very slowly on Ubuntu 14.04.
-
 
 ## Installing 4GP in a python virtual environment
 
@@ -234,19 +235,58 @@ Note that the 4MOST GitLab account is password protected, so you will need to ge
 # Using the web-based spectrum browser
 
 4GP comes with a web-based tool for browsing the contents of spectrum
-libraries. The tool is based on flask, and requires additional Javascript
-dependencies to be installed using bower. bower is a part of nodeJS and can be
-installed with the node package manager (npm).
+libraries.
+
+This is very handy, as it lets you very quickly search for spectra, view graphs of their flux vs wavelength, and also export spectra as text files for use in other tools.
+
+### Installation
+
+The tool is based on python / flask, which is a simple framework for hosting websites from within a short python script.
+It also requires additional Javascript dependencies. If you're using Ubuntu 16.04 (**not** older versions),
+ you can install them as follows, using nodeJS / bower:
 
 ```
 apt-get install nodejs
 npm update
 sudo npm install -g bower
-cd src/spectrumBrowser
+cd 4most-4gp/src/spectrumBrowser
 bower install
+```
+
+If you're running any other operating system, then it's a bit of a pain to install nodeJS. You can download
+all the dependencies manually as follows:
+
+```
+cd 4most-4gp/src/spectrumBrowser/static
+
+# Install jQuery
+mkdir -p vendor/jquery/dist
+wget https://code.jquery.com/jquery-1.12.4.min.js -O vendor/jquery/dist/jquery.min.js
+
+# Install bootstrap
+mkdir -p vendor/bootstrap
+cd vendor/bootstrap
+wget https://github.com/twbs/bootstrap/releases/download/v4.0.0-alpha.2/bootstrap-4.0.0-alpha.2-dist.zip
+unzip bootstrap-4.0.0-alpha.2-dist.zip
+mv bootstrap-4.0.0-alpha.2-dist dist
+cd ../..
+
+# Install font awesome
+cd vendor
+wget http://fontawesome.io/assets/font-awesome-4.7.0.zip
+unzip font-awesome-4.7.0.zip
+mv font-awesome-4.7.0 font-awesome
+```
+
+### Running the browser
+
+Once you have all the dependencies installed, you can start the browser as follows:
+
+```
 python spectrumBrowser.py --library-path ../../../workspace
 ```
 
+Once you start the python script,
 Flask will then tell you what web address to point your web browser: the
 address is usually `http://127.0.0.1:5000`.
 
