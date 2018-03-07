@@ -459,7 +459,6 @@ SELECT filename FROM spectra WHERE libraryId=%s AND specId IN (%s);
         # Return spectrum count
         return count
 
-
     def purge(self):
         """
         This irrevocably deletes the spectrum library from the database and from your disk. You have been warned.
@@ -545,7 +544,7 @@ FROM spectra s
 INNER JOIN origins o ON s.originId = o.originId
 WHERE {} ORDER BY s.filename;""".format(" AND ".join(criteria))
         self._parameterised_query(query, criteria_params)
-        return [ {"specId":x[0], "filename":x[1], "name":x[2]} for x in self._db_cursor.fetchall()]
+        return [{"specId": x[0], "filename": str(x[1]), "name": x[2]} for x in self._db_cursor.fetchall()]
 
     @requires_ids_or_filenames
     def get_metadata(self, ids=None, filenames=None):
