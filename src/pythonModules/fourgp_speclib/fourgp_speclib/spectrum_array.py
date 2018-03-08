@@ -200,9 +200,9 @@ class SpectrumArray(object):
 
         # Load first spectrum to work out what wavelength raster we're using
         if not binary:
-            wavelengths, item_values, item_value_errors = np.loadtxt(os_path.join(path, filenames[0])).T
+            wavelengths, item_values, item_value_errors = np.loadtxt(str(os_path.join(path, filenames[0]))).T
         else:
-            wavelengths, item_values, item_value_errors = np.load(os_path.join(path, filenames[0]))
+            wavelengths, item_values, item_value_errors = np.load(str(os_path.join(path, filenames[0])))
         raster_hash = hash_numpy_array(wavelengths)
 
         # Allocate numpy array to store this SpectrumArray into
@@ -216,9 +216,9 @@ class SpectrumArray(object):
             assert os_path.exists(filename), "File <{}> does not exist.".format(filename)
 
             if not binary:
-                item_wavelengths, item_values, item_value_errors = np.loadtxt(filename).T
+                item_wavelengths, item_values, item_value_errors = np.loadtxt(str(filename)).T
             else:
-                item_wavelengths, item_values, item_value_errors = np.load(filename)
+                item_wavelengths, item_values, item_value_errors = np.load(str(filename))
 
             assert hash_numpy_array(item_wavelengths) == raster_hash, \
                 "Item <{}> has a different wavelength raster from preceding spectra in SpectrumArray.".format(
