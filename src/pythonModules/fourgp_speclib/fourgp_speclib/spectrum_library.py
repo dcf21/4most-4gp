@@ -1,6 +1,9 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
+from os import path as os_path
+import re
+
 
 def requires_ids_or_filenames(method):
     """
@@ -35,7 +38,7 @@ class SpectrumLibrary(object):
     
     Spectrum libraries are a bit like having a directory full of data files on disk, each containing a spectrum.
     However, they also include a database which can store arbitrary metadata about each spectrum -- for example,
-    stellar paramaters and abundances. It is possible to search a spectrum library based on metadata constraints.
+    stellar parameters and abundances. It is possible to search a spectrum library based on metadata constraints.
 
     Various implementations of the SpectrumLibrary class are provided, storing the metadata in different flavours of
     SQL database. SQLite is probably the simplest and creates portable libraries that you can transfer to a different
@@ -47,7 +50,7 @@ class SpectrumLibrary(object):
         A list of the metadata fields set on spectra in this SpectrumLibrary
     """
 
-    def __init__(self):
+    def __init__(self, path=None):
         self._metadata_fields = None
 
     def __str__(self):
@@ -191,3 +194,75 @@ class SpectrumLibrary(object):
             origin = spectrum["origin"]
             obj = other.open(ids=[uid])
             self.insert(spectra=obj, filenames=[filename], origin=origin, overwrite=overwrite)
+
+    @classmethod
+    def open_and_search(cls, library_spec, workspace, extra_constraints):
+        """
+        Helper function which allows you to open a spectrum library and search it in a single function call.
+
+        The argument <library_spec> can take the form of the name of a library <my_library>, or can contain
+        metadata constraints as a comma-separated list in square brackets, e.g. <my_library[continuum_normalised=1]>.
+        This is useful if you want to write a script which allows the user to specify parameter cuts on to command line
+        when they specify which spectrum library to operate on.
+
+        Multiple constraints should be specified as a comma-separated list, e.g.:
+
+        my_library[continuum_normalised=1,5000<Teff<6000]
+
+        Constraints can be specified in two formats as shown above. You can either require equality, or require that
+        the parameter falls within a range using the < operator.
+
+        If you use the < operator, you must specify both lower and upper limit.
+
+        :param library_spec:
+            The name of the spectrum library to open, suffixed with any metadata constraints in [] brackets.
+
+        :param workspace:
+            The path of disk to where spectrum libraries are stored.
+
+        :param extra_constraints:
+            A dictionary containing any additional metadata constraints to be added to the ones supplied in
+            library_spec.
+
+        :return:
+            Dictionary, containing:
+                library -- a SpectrumLibrary instance
+                items -- the result of the metadata search within the SpectrumLibrary
+                constraints -- a list of the metadata constraints applied
+        """
+
+        test = re.match("([^\[]*)\[(.*)\]$", library_spec)
+        constraints = {}
+        if test is None:
+            library_name = library_spec
+        else:
+            library_name = test.group(1)
+            for constraint in test.group(2).split(","):
+                words_1 = constraint.split("=")
+                words_2 = constraint.split("<")
+                if len(words_1) == 2:
+                    constraint_name = words_1[0]
+                    try:
+                        constraint_value = float(words_1[1])
+                    except ValueError:
+                        constraint_value = words_1[1]
+                    constraints[constraint_name] = constraint_value
+                elif len(words_2) == 3:
+                    constraint_name = words_2[1]
+                    try:
+                        constraint_value_a = float(words_2[0])
+                        constraint_value_b = float(words_2[2])
+                    except ValueError:
+                        constraint_value_a = words_2[0]
+                        constraint_value_b = words_2[2]
+                    constraints[constraint_name] = (constraint_value_a, constraint_value_b)
+                else:
+                    assert False, "Could not parse constraint <{}>".format(constraint)
+        constraints.update(extra_constraints)
+        library_path = os_path.join(workspace, library_name)
+        input_library = cls(path=library_path)
+        library_items = input_library.search(**constraints)
+        return {
+            "library": input_library,
+            "items": library_items
+        }
