@@ -123,7 +123,7 @@ class CannonInstance(object):
         if load_from_file is None:
             logger.info("Starting to train the Cannon")
             with suppress_stdout(self._progress_bar):
-                self._model.train(op_kwargs={'xtol': tolerance, 'ftol': tolerance},
+                self._model.train(op_kwds={'xtol': tolerance, 'ftol': tolerance},
                                   op_bfgs_kwargs={},
                                   threads=threads
                                   )

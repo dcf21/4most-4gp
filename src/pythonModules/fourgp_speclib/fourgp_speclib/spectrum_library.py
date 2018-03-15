@@ -264,5 +264,6 @@ class SpectrumLibrary(object):
         library_items = input_library.search(**constraints)
         return {
             "library": input_library,
-            "items": library_items
+            "items": library_items,
+            "constraints": constraints
         }
