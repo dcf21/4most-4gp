@@ -389,13 +389,12 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             return []
 
         output = []
-        filename_strings = ["\"%s\"" % re.sub(r"[^a-zA-Z0-9_\-\.]", "", i) for i in filenames]
-        self._parameterised_query("""
-SELECT specId FROM spectra WHERE libraryId={} AND filename IN ({});
-""".format(self._library_id, ",".join(filename_strings)))
+        for filename in filenames:
+            self._parameterised_query("SELECT specId FROM spectra WHERE libraryId=? AND filename=?;",
+                                      (self._library_id, filename))
 
-        for item in self._db_cursor:
-            output.append(item[0])
+            for item in self._db_cursor:
+                output.append(item[0])
 
         assert len(output) == len(filenames), "Some of the requested filenames did not exist in database. " \
                                               "Matched {} of {} filenames.".format(len(output), len(filenames))
@@ -420,13 +419,14 @@ SELECT specId FROM spectra WHERE libraryId={} AND filename IN ({});
             return []
 
         output = []
-        id_strings = [str(int(i)) for i in ids]
-        self._parameterised_query("""
-SELECT filename FROM spectra WHERE libraryId=%s AND specId IN (%s);
-""" % (self._library_id, ",".join(id_strings)))
+        for item in ids:
+            self._parameterised_query("SELECT filename FROM spectra WHERE libraryId=? AND specId=?;",
+                                      (self._library_id, item))
+            for item in self._db_cursor:
+                output.append(item[0])
 
-        for item in self._db_cursor:
-            output.append(item[0])
+        assert len(output) == len(ids), "Some of the requested IDs did not exist in database. " \
+                                        "Matched {} of {} IDs.".format(len(output), len(ids))
         return output
 
     def __len__(self):
