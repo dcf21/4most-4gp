@@ -5,10 +5,12 @@ import logging
 from numpy import RankWarning
 from warnings import simplefilter
 
-from .cannon_instance import \
-    CannonInstance, \
-    CannonInstanceWithContinuumNormalisation, \
-    CannonInstanceWithRunningMeanNormalisation
+#from .cannon_instance import \
+#    CannonInstance, \
+#    CannonInstanceWithContinuumNormalisation, \
+#    CannonInstanceWithRunningMeanNormalisation
+
+CannonInstance = CannonInstanceWithContinuumNormalisation = CannonInstanceWithRunningMeanNormalisation = None
 
 from .cannon_instance_release_2018_01_09_1 import \
     CannonInstance_2018_01_09
