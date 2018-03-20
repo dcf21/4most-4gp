@@ -144,7 +144,8 @@ class FourFS:
             Spectrum
             
         :param input_spectrum_continuum_normalised:
-            Continuum-normalised version of the Spectrum object that we want to pass through 4FS.
+            Continuum-normalised version of the Spectrum object that we want to pass through 4FS. This can be null,
+            in which case we only produce a flux-normalised spectrum as output.
             
         :type input_spectrum_continuum_normalised:
             Spectrum
@@ -171,22 +172,25 @@ class FourFS:
             None
         """
 
-        assert input_spectrum.raster_hash == input_spectrum_continuum_normalised.raster_hash, \
-            "Continuum-normalised spectrum needs to have the same wavelength raster as the original."
-
         # Extract data from input spectra
         wavelength_raster = input_spectrum.wavelengths
         flux = input_spectrum.values
-        continuum_normalised_flux = input_spectrum_continuum_normalised.values
+
+        if input_spectrum_continuum_normalised is not None:
+            assert input_spectrum.raster_hash == input_spectrum_continuum_normalised.raster_hash, \
+                "Continuum-normalised spectrum needs to have the same wavelength raster as the original."
+            continuum_normalised_flux = input_spectrum_continuum_normalised.values
+
+            if not continuum_only:
+                data = flux
+            else:
+                # If we only want continuum, without lines, then divide by continuum_normalised flux
+                data = flux / continuum_normalised_flux
+        else:
+            data = flux
 
         lambda_min = np.min(wavelength_raster)
         delta_lambda = wavelength_raster[1] - wavelength_raster[0]
-
-        if not continuum_only:
-            data = flux
-        else:
-            # If we only want continuum, without lines, then divide by continuum_normalised flux
-            data = flux / continuum_normalised_flux
 
         fits_spectrum = Spectrum(wavelengths=wavelength_raster,
                                  values=data,
@@ -263,15 +267,21 @@ class FourFS:
             self.metadata_store[self.template_counter] = input_spectrum.metadata.copy()
 
             # Generates the 4FS readable fits files from the output spectra from Turbospectrum
-            self.make_fits_spectral_template(input_spectrum=input_spectrum,
-                                             input_spectrum_continuum_normalised=input_spectrum_continuum_normalised,
-                                             output_filename='template_{}.fits'.format(self.template_counter),
-                                             resolution=(resolution is not None))
-            self.make_fits_spectral_template(input_spectrum=input_spectrum,
-                                             input_spectrum_continuum_normalised=input_spectrum_continuum_normalised,
-                                             output_filename='template_{}_c.fits'.format(self.template_counter),
-                                             resolution=(resolution is not None),
-                                             continuum_only=True)
+            self.make_fits_spectral_template(
+                input_spectrum=input_spectrum,
+                input_spectrum_continuum_normalised=input_spectrum_continuum_normalised,
+                output_filename='template_{}.fits'.format(self.template_counter),
+                resolution=(resolution is not None))
+
+            # Generate a second 4FS-readable template with just the continuum, and no lines. This is used to recover
+            # a continuum-normalised spectrum at the end of the process
+            if input_spectrum_continuum_normalised is not None:
+                self.make_fits_spectral_template(
+                    input_spectrum=input_spectrum,
+                    input_spectrum_continuum_normalised=input_spectrum_continuum_normalised,
+                    output_filename='template_{}_c.fits'.format(self.template_counter),
+                    resolution=(resolution is not None),
+                    continuum_only=True)
 
             # Run 4FS using all SNR definitions and all SNR values on this spectrum
             for snr_definition in self.distinct_snr_definitions:
@@ -284,15 +294,18 @@ class FourFS:
                         '0.0', '0.0', self.reference_magnitude, self.magnitude)
 
             # Additionally, run 4FS on a continuum-only spectrum at a high SNR of 250
-            writestr += 'template_{}_c {} {} {} {} {} {}\n'.format(
-                self.template_counter,
-                os_path.join(self.tmp_dir, 'template_{}_c.fits'.format(self.template_counter)),
-                'goodSNR250c', '0.0', '0.0', self.reference_magnitude, self.magnitude)
+            if input_spectrum_continuum_normalised is not None:
+                writestr += 'template_{}_c {} {} {} {} {} {}\n'.format(
+                    self.template_counter,
+                    os_path.join(self.tmp_dir, 'template_{}_c.fits'.format(self.template_counter)),
+                    'goodSNR250c', '0.0', '0.0', self.reference_magnitude, self.magnitude)
 
             # Populate star_list with the list of FITS files we're expecting 4FS to produce
             for snr in self.snr_list:
                 star_list.append('template_{}_SNR{:.1f}'.format(self.template_counter, snr))
-            star_list.append('template_{}_c'.format(self.template_counter))
+
+            if input_spectrum_continuum_normalised is not None:
+                star_list.append('template_{}_c'.format(self.template_counter))
 
             # Increment template counter
             self.template_counter += 1
@@ -429,40 +442,42 @@ class FourFS:
                 snrs_final = np.concatenate(snrs)
 
                 # Load continuum spectra
-                d_c = [fits.open(
-                    os_path.join(path, 'specout_template_template_{}_c_{}_{}.fits'.format(i, setup, band))
-                )[2].data
-                       for band in bands]
+                continuum_filenames = [os_path.join(path, 'specout_template_template_{}_c_{}_{}.fits'.
+                                                   format(i, setup, band)) for band in bands]
+                have_continuum_version = os.path.exists(continuum_filenames[0])
 
-                # Read the data from the FITS files
-                wavelengths_c = [item['LAMBDA'] for item in d_c]
-                # fluxes_c = [(item['REALISATION'] - item['SKY']) for item in d_c]
-                fluences_c = [item['FLUENCE'] for item in d_c]
+                if have_continuum_version:
+                    d_c = [fits.open(item)[2].data for item in continuum_filenames]
 
-                if setup == 'LRS':
-                    indices = (
-                        np.where(wavelengths_c[0] <= 5327.7)[0],
-                        np.where((wavelengths_c[1] > 5327.7) & (wavelengths_c[1] <= 7031.7))[0],
-                        np.where(wavelengths_c[2] > 7031.7)[0]
-                    )
-                    # wavelengths_c = [item[indices[j]] for j, item in enumerate(wavelengths_c)]
-                    # fluxes_c = [item[indices[j]] for j, item in enumerate(fluxes_c)]
-                    fluences_c = [item[indices[j]] for j, item in enumerate(fluences_c)]
+                    # Read the data from the FITS files
+                    wavelengths_c = [item['LAMBDA'] for item in d_c]
+                    # fluxes_c = [(item['REALISATION'] - item['SKY']) for item in d_c]
+                    fluences_c = [item['FLUENCE'] for item in d_c]
 
-                # Combine everything into one set of arrays to be saved
-                # wavelengths_final_c = np.concatenate(wavelengths_c)
+                    if setup == 'LRS':
+                        indices = (
+                            np.where(wavelengths_c[0] <= 5327.7)[0],
+                            np.where((wavelengths_c[1] > 5327.7) & (wavelengths_c[1] <= 7031.7))[0],
+                            np.where(wavelengths_c[2] > 7031.7)[0]
+                        )
+                        # wavelengths_c = [item[indices[j]] for j, item in enumerate(wavelengths_c)]
+                        # fluxes_c = [item[indices[j]] for j, item in enumerate(fluxes_c)]
+                        fluences_c = [item[indices[j]] for j, item in enumerate(fluences_c)]
 
-                fluxes_final_c = np.concatenate([fluence_c * max(fluence) / max(fluence_c)
-                                                 for fluence, fluence_c in zip(fluences, fluences_c)
-                                                 if len(fluence) > 0])
+                    # Combine everything into one set of arrays to be saved
+                    # wavelengths_final_c = np.concatenate(wavelengths_c)
 
-                # Do continuum normalisation
-                normalised_fluxes_final = fluxes_final / fluxes_final_c
+                    fluxes_final_c = np.concatenate([fluence_c * max(fluence) / max(fluence_c)
+                                                     for fluence, fluence_c in zip(fluences, fluences_c)
+                                                     if len(fluence) > 0])
 
-                # Remove bad pixels
-                # Any pixels where flux > 2 or flux < 0 get reset to zero for other downstream codes
-                normalised_fluxes_final[
-                    np.where((normalised_fluxes_final > 2.0) | (normalised_fluxes_final <= 0.00))[0]] = 0
+                    # Do continuum normalisation
+                    normalised_fluxes_final = fluxes_final / fluxes_final_c
+
+                    # Remove bad pixels
+                    # Any pixels where flux > 2 or flux < 0 get reset to zero for other downstream codes
+                    normalised_fluxes_final[
+                        np.where((normalised_fluxes_final > 2.0) | (normalised_fluxes_final <= 0.00))[0]] = 0
 
                 # Turn data into a 4GP Spectrum object
                 metadata = self.metadata_store[i]
@@ -485,11 +500,14 @@ class FourFS:
                                     value_errors=fluxes_final / snrs_final,
                                     metadata=metadata.copy())
 
-                metadata['continuum_normalised'] = 1
-                spectrum_continuum_normalised = Spectrum(wavelengths=wavelengths_final,
-                                                         values=normalised_fluxes_final,
-                                                         value_errors=normalised_fluxes_final / snrs_final,
-                                                         metadata=metadata.copy())
+                if have_continuum_version:
+                    metadata['continuum_normalised'] = 1
+                    spectrum_continuum_normalised = Spectrum(wavelengths=wavelengths_final,
+                                                             values=normalised_fluxes_final,
+                                                             value_errors=normalised_fluxes_final / snrs_final,
+                                                             metadata=metadata.copy())
+                else:
+                    spectrum_continuum_normalised = None
 
                 output[i][snr] = {
                     "spectrum": spectrum,
