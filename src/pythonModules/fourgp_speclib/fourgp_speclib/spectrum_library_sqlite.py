@@ -87,7 +87,7 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
         assert os_path.exists(self._path_db),\
             "Attempting to open an SQLite database <{}> that doesn't exist.".format(self._path_db)
 
-        self._db = sqlite3.connect(self._path_db, isolation_level=None)
+        self._db = sqlite3.connect(self._path_db)
         self._db_cursor = self._db.cursor()
         return self._db, self._db_cursor
 
@@ -112,3 +112,4 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
 
     def _parameterised_query_many(self, sql, parameters=None):
         self._db_cursor.executemany(sql, parameters)
+
