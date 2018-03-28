@@ -35,7 +35,7 @@ class CannonInstance(object):
     """
 
     def __init__(self, training_set, label_names, wavelength_arms=None,
-                 censors=None, progress_bar=False, threads=None, tolerance=1e-4,
+                 censors=None, progress_bar=False, threads=None, tolerance=None,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
