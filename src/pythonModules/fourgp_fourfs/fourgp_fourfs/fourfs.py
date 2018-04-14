@@ -91,7 +91,7 @@ class FourFS:
         assert len(lrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST RGB bands."
         assert len(hrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST RGB bands."
 
-        self.distinct_snr_definitions = set([i for i in (lrs_use_snr_definitions + hrs_use_snr_definitions)
+        self.distinct_snr_definitions = set([i for i in (list(lrs_use_snr_definitions) + list(hrs_use_snr_definitions))
                                              if isinstance(i, basestring) and len(i) > 0])
 
         # Create temporary directory
