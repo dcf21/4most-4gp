@@ -99,11 +99,12 @@ class FourFS:
         self.hrs_use_snr_definitions = hrs_use_snr_definitions if run_hrs else []
 
         if run_lrs:
-            assert len(lrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST LRS RGB arms."
+            assert len(self.lrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST LRS RGB arms."
         if run_hrs:
-            assert len(hrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST HRS RGB arms."
+            assert len(self.hrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST HRS RGB arms."
 
-        self.distinct_snr_definitions = set([i for i in (list(lrs_use_snr_definitions) + list(hrs_use_snr_definitions))
+        self.distinct_snr_definitions = set([i for i in (list(self.lrs_use_snr_definitions) +
+                                                         list(self.hrs_use_snr_definitions))
                                              if isinstance(i, basestring) and len(i) > 0])
 
         # Create temporary directory
@@ -544,7 +545,7 @@ class FourFS:
         os.chdir(self.tmp_dir)
 
         # Make sure there aren't any old 4FS outputs lying around
-        os.system("rm -Rf outdir_LRS outdir_HRS template*.fits")
+        os.system("rm -Rf outdir_LRS outdir_HRS")
 
         # Run 4FS
         if self.run_lrs:
@@ -561,6 +562,9 @@ class FourFS:
                                                         setup=mode
                                                         )
                 output[mode] = stitched_spectra
+
+        # Make sure there aren't any old FITS files lying around
+        os.system("rm -Rf template*.fits")
 
         # Switch back into the user's cwd
         os.chdir(cwd)
