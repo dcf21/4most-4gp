@@ -27,6 +27,8 @@ class FourFS:
                  snr_list=None,
                  snr_per_pixel=True,
                  snr_definitions=None,
+                 run_lrs=True,
+                 run_hrs=True,
                  lrs_use_snr_definitions=None,
                  hrs_use_snr_definitions=None
                  ):
@@ -57,6 +59,12 @@ class FourFS:
             List of ways we define SNR. Each should take the form of a tuple (name,min,max), where we take the median
             SNR per pixel between the specified minimum and maximum wavelengths in Angstrom.
 
+        :param run_lrs:
+            Do we want output for 4MOST LRS?
+
+        :param run_hrs:
+            Do we want output for 4MOST HRS?
+
         :param lrs_use_snr_definitions:
             List of three SNR definitions to use for the red, green and blue bands of 4MOST LRS.
 
@@ -64,6 +72,8 @@ class FourFS:
             List of three SNR definitions to use for the red, green and blue bands of 4MOST HRS.
         """
         self.path_to_4fs = path_to_4fs
+        self.run_lrs = run_lrs
+        self.run_hrs = run_hrs
         self.magnitude = magnitude
         self.magnitude_unreddened = magnitude_unreddened
         self.photometric_band = photometric_band
@@ -73,7 +83,7 @@ class FourFS:
         self.metadata_store = {}
 
         if snr_list is None:
-            snr_list = (10, 20, 50, 80, 100, 130, 180, 250, 500)
+            snr_list = (10,12,14,16,18,20,23,26,30,35,40,45,50,80,100,130,180,250)
         self.snr_list = snr_list
 
         if snr_definitions is None:
@@ -85,11 +95,13 @@ class FourFS:
         if hrs_use_snr_definitions is None:
             hrs_use_snr_definitions = ("MEDIANSNR", "MEDIANSNR", "MEDIANSNR")
 
-        self.lrs_use_snr_definitions = lrs_use_snr_definitions
-        self.hrs_use_snr_definitions = hrs_use_snr_definitions
+        self.lrs_use_snr_definitions = lrs_use_snr_definitions if run_lrs else []
+        self.hrs_use_snr_definitions = hrs_use_snr_definitions if run_hrs else []
 
-        assert len(lrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST RGB bands."
-        assert len(hrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST RGB bands."
+        if run_lrs:
+            assert len(lrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST LRS RGB arms."
+        if run_hrs:
+            assert len(hrs_use_snr_definitions) == 3, "Need three SNR definitions, for 4MOST HRS RGB arms."
 
         self.distinct_snr_definitions = set([i for i in (list(lrs_use_snr_definitions) + list(hrs_use_snr_definitions))
                                              if isinstance(i, basestring) and len(i) > 0])
@@ -100,11 +112,13 @@ class FourFS:
         os.system("mkdir -p {}".format(self.tmp_dir))
 
         # Put standard 4FS configuration files into temporary working directory
-        with open(os_path.join(self.tmp_dir, "ETC_input_params_HRS.txt"), "w") as f:
-            f.write(config_files.ETC_input_params_HRS)
+        if run_hrs:
+            with open(os_path.join(self.tmp_dir, "ETC_input_params_HRS.txt"), "w") as f:
+                f.write(config_files.ETC_input_params_HRS)
 
-        with open(os_path.join(self.tmp_dir, "ETC_input_params_LRS.txt"), "w") as f:
-            f.write(config_files.ETC_input_params_LRS)
+        if run_lrs:
+            with open(os_path.join(self.tmp_dir, "ETC_input_params_LRS.txt"), "w") as f:
+                f.write(config_files.ETC_input_params_LRS)
 
         with open(os_path.join(self.tmp_dir, "rulelist.txt"), "w") as f:
             f.write(config_files.rulelist)
@@ -530,20 +544,23 @@ class FourFS:
         os.chdir(self.tmp_dir)
 
         # Make sure there aren't any old 4FS outputs lying around
-        os.system("rm -Rf outdir_LRS outdir_HRS")
+        os.system("rm -Rf outdir_LRS outdir_HRS template*.fits")
 
         # Run 4FS
-        os.system("{} PARAM_FILENAME=ETC_input_params_LRS.txt > lrs_output.log 2>&1".format(fourfs_command))
-        os.system("{} PARAM_FILENAME=ETC_input_params_HRS.txt > hrs_output.log 2>&1".format(fourfs_command))
+        if self.run_lrs:
+            os.system("{} PARAM_FILENAME=ETC_input_params_LRS.txt > lrs_output.log 2>&1".format(fourfs_command))
+        if self.run_hrs:
+            os.system("{} PARAM_FILENAME=ETC_input_params_HRS.txt > hrs_output.log 2>&1".format(fourfs_command))
 
         # Stitched 4MOST wavebands together
         output = {}
-        for mode in ("LRS", "HRS"):
-            stitched_spectra = self.combine_spectra(template_numbers=template_information['template_numbers'],
-                                                    path="outdir_{}".format(mode),
-                                                    setup=mode
-                                                    )
-            output[mode] = stitched_spectra
+        for mode, active in (("LRS", self.run_lrs), ("HRS", self.run_hrs)):
+            if active:
+                stitched_spectra = self.combine_spectra(template_numbers=template_information['template_numbers'],
+                                                        path="outdir_{}".format(mode),
+                                                        setup=mode
+                                                        )
+                output[mode] = stitched_spectra
 
         # Switch back into the user's cwd
         os.chdir(cwd)
