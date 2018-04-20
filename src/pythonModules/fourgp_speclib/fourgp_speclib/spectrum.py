@@ -287,7 +287,8 @@ class Spectrum(object):
         new_wavelengths = self.wavelengths.copy()
         new_values = self.values.copy()
         new_value_errors = self.value_errors.copy()
-        output = Spectrum(wavelengths=new_wavelengths, values=new_values, value_errors=new_value_errors)
+        output = Spectrum(wavelengths=new_wavelengths, values=new_values, value_errors=new_value_errors,
+                          metadata=self.metadata.copy())
 
         if self.mask_set:
             output.copy_mask_from(self)
@@ -352,7 +353,8 @@ class Spectrum(object):
         new_wavelengths = self.wavelengths * (1 + z)
         new_values = self.values.copy()
         new_value_errors = self.value_errors.copy()
-        output = Spectrum(wavelengths=new_wavelengths, values=new_values, value_errors=new_value_errors)
+        output = Spectrum(wavelengths=new_wavelengths, values=new_values, value_errors=new_value_errors,
+                          metadata=self.metadata.copy())
 
         if self.mask_set:
             output.copy_mask_from(self)
