@@ -200,7 +200,7 @@ SKY.EMISSION.FILENAME        = '4FS_ETC_system_model_v0.2/sky/paranal_sky_emissi
 
 OBS_PARAMS.INTERP_METHOD     = 'NEAREST'                              # Method to use when interpolating obs params grid: NEAREST,LINEAR,SPLINE
 OBS_PARAMS.SKYBRIGHT_TYPE    = 'ZENITH'                               # Is the specified sky brightness to be measured at ZENITH or LOCALly?
-OBS_PARAMS.AIRMASS           = "1.3"                                  # List of airmasses to simulate
+OBS_PARAMS.AIRMASS           = "1.4"                                  # List of airmasses to simulate
 OBS_PARAMS.IQ                = "1.1"                                  # List of delivered image quality values to simulate (V-band,FWHM,arcsec)
 OBS_PARAMS.SKYBRIGHT         = "21.77"                                # List of sky brightnesses to simulate (V-band,ABmag/arcsec2)
 OBS_PARAMS.TILT              = "6.0"                                  # List of tilts to simulate (mm)
