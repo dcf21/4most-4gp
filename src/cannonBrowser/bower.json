@@ -1,0 +1,22 @@
+{
+  "name": "4gp_spectrum_browser",
+  "version": "1.0.0",
+  "authors": [
+    "Dominic Ford <dominic@astro.lu.se>"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/dcf21/4most-4gp",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "static/vendor",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "bootstrap": "4.0.0-alpha.2",
+    "jquery": "~1.11.3",
+    "font-awesome": "fontawesome#^4.6.1"
+  }
+}

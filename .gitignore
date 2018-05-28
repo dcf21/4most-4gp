@@ -1,6 +1,7 @@
 .idea
 workspace
 src/spectrumBrowser/static/vendor
+src/cannonBrowser/static/vendor
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,0 +1,43 @@
+{% extends "page.html" %}
+{% block title %}Index of Cannon Runs{% endblock %}
+{% block head %}
+{% endblock %}
+{% block content %}
+<h1>Index of Cannon Runs</h1>
+
+<div class="alert alert-info" role="alert">
+    Showing Cannon runs in the path<br/><kbd>{{ path }}</kbd>
+</div>
+
+<table class="library_list bordered bordered_slim stripy">
+    <thead>
+    <tr>
+        <td>Name</td>
+        <td>Modification date</td>
+    </tr>
+    </thead>
+    <tbody>
+    {% for cannon in cannon_runs %}
+    <tr>
+        <td>
+            <a href="{{ cannon.url }}">
+                {{ cannon.name }}
+            </a>
+        </td>
+        <td>
+            {{ cannon.item_time }}
+        </td>
+    </tr>
+    {% else %}
+    <tr>
+        <td>
+            No Cannon runs present.
+        </td>
+        <td>
+
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

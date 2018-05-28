@@ -1,0 +1,58 @@
+{% extends "page.html" %}
+{% block title %}Cannon run &lt;{{ cannon }}&gt;{% endblock %}
+{% block head %}
+{% endblock %}
+{% block content %}
+<h1>{{ cannon }}</h1>
+
+<h4>Metadata</h4>
+
+<table class="library_search bordered bordered_slim stripy">
+    <thead>
+    <tr>
+        <td>Metadata field</td>
+        <td>Value</td>
+    </tr>
+    </thead>
+    <tbody>
+    {% for item in metadata %}
+    <tr>
+        <td>
+            {{ item.key }}
+        </td>
+        <td>
+            {{ item.value }}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<hr/>
+
+<h4>Vectorized terms</h4>
+
+<table class="library_search bordered bordered_slim stripy">
+    <thead>
+    <tr>
+        <td>Index</td>
+        <td>Term</td>
+    </tr>
+    </thead>
+    <tbody>
+    {% for item in vectorizer_terms %}
+    <tr>
+        <td>
+            {{ item[0] }}
+        </td>
+        <td>
+            <a href='{{ url_for("coefficient_spectrum", cannon=cannon, term=item[0]) }}'>
+                {{ item[1] }}
+            </a>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

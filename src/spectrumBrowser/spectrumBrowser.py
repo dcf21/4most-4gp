@@ -63,7 +63,7 @@ def library_index():
     return render_template('index.html', path=args.path, libraries=library_info)
 
 
-# Search a particular spectrum library
+# Search for spectra within a particular spectrum library
 @app.route("/library/<library>", methods=("GET", "POST"))
 def library_search(library):
     self_url = url_for("library_search", library=library)
@@ -127,7 +127,7 @@ def library_search(library):
                            search=search, results=results, result_count=result_count, self_url=self_url)
 
 
-# Search a particular spectrum
+# Display a particular spectrum
 @app.route("/spectrum/<library>/<spec_id>", methods=("GET", "POST"))
 def spectrum_view(library, spec_id):
     lambda_min = 3600
@@ -140,17 +140,21 @@ def spectrum_view(library, spec_id):
         lambda_max = float(request.form.get("lambda_max"))
     except (TypeError, ValueError):
         pass
+
     parent_url = url_for("library_search", library=library)
     self_url = url_for("spectrum_view", library=library, spec_id=spec_id)
     txt_url = url_for("spectrum_txt", library=library, spec_id=spec_id)
     data_url = url_for("spectrum_json", library=library, spec_id=spec_id)
     png_url = url_for("spectrum_png", library=library, spec_id=spec_id, lambda_min=lambda_min, lambda_max=lambda_max)
+
     path = os_path.join(args.path, library)
     x = SpectrumLibrarySqlite(path=path)
+
     metadata_keys = x.list_metadata_fields()
     metadata_keys.sort()
     metadata = x.get_metadata(ids=int(spec_id))[0]
     metadata["spectrum_id"] = spec_id
+
     return render_template('spectrum.html', path=args.path, library=library, metadata_keys=metadata_keys,
                            parent_url=parent_url, metadata=metadata,
                            txt_url=txt_url, data_url=data_url, png_url=png_url,
@@ -163,6 +167,7 @@ def spectrum_json(library, spec_id):
     path = os_path.join(args.path, library)
     x = SpectrumLibrarySqlite(path=path)
     spectrum = x.open(ids=int(spec_id)).extract_item(0)
+
     data = zip(spectrum.wavelengths, spectrum.values)
     return json.dumps(data)
 
@@ -174,6 +179,7 @@ def spectrum_txt(library, spec_id):
     x = SpectrumLibrarySqlite(path=path)
     spectrum = x.open(ids=int(spec_id)).extract_item(0)
     data = np.asarray(zip(spectrum.wavelengths, spectrum.values, spectrum.value_errors))
+
     txt_output = StringIO.StringIO()
     np.savetxt(txt_output, data)
     response = make_response(txt_output.getvalue())

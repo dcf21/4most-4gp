@@ -1,37 +1,16 @@
 {% extends "page.html" %}
-{% block title %}Spectrum from &lt;{{ library }}&gt;{% endblock %}
+{% block title %}Coefficient spectrum from &lt;{{ cannon }}&gt;{% endblock %}
 {% block head %}
 {% endblock %}
 {% block content %}
 <h1>
-    Spectrum from
+    Coefficient spectrum from
     <a href="{{parent_url}}">
-        {{ library }}
+        {{ cannon }}
     </a>
 </h1>
 
-<table class="spectrum_metadata bordered bordered_slim stripy">
-    <thead>
-    <tr>
-        <td>Metadata field</td>
-        <td>Value</td>
-    </tr>
-    </thead>
-    <tbody>
-    {% for item in metadata_keys %}
-    <tr>
-        <td>
-            {{ item }}
-        </td>
-        <td>
-            {{ metadata[item] }}
-        </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-</table>
-
-<hr/>
+<h4>Term name: {{ term_name }}</h4>
 
 <form method="POST" action="{{self_url}}">
     Show wavelengths from
