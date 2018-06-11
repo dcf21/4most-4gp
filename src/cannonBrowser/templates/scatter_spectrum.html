@@ -1,0 +1,34 @@
+{% extends "page.html" %}
+{% block title %}Scatter parameter spectrum from &lt;{{ cannon }}&gt;{% endblock %}
+{% block head %}
+{% endblock %}
+{% block content %}
+<h1>
+    Scatter parameter spectrum from
+    <a href="{{parent_url}}">
+        {{ cannon }}
+    </a>
+</h1>
+
+<form method="POST" action="{{self_url}}">
+    Show wavelengths from
+    <input style="width:80px;" type="text" name="lambda_min" value="{{lambda_min}}"/>
+    A to
+    <input style="width:80px;" type="text" name="lambda_max" value="{{lambda_max}}"/>
+    A.
+    <input class="btn btn-sm btn-primary" style="margin:20px 0; vertical-align: middle;" type="submit" value="Update..."/>
+</form>
+
+<img src="{{png_url}}">
+
+<div>
+<form method="get" action="{{txt_url}}">
+<input style="margin:16px;" type="submit" name="Download as text" value="Download as text" />
+</form>
+
+<form method="get" action="{{data_url}}">
+<input style="margin:16px;" type="submit" name="Download as JSON" value="Download as JSON" />
+</form>
+</div>
+
+{% endblock %}

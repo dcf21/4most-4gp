@@ -207,5 +207,83 @@ def coefficient_spectrum_png(cannon, term, lambda_min, lambda_max):
     return response
 
 
+# Display a particular scatter spectrum
+@app.route("/scatter_spectrum/<cannon>", methods=("GET", "POST"))
+def scatter_spectrum(cannon):
+    path_json = os_path.join(args.path, cannon)
+    path_cannon = re.sub(".json", ".cannon", path_json)
+
+    lambda_min = 3600
+    lambda_max = 9600
+    try:
+        lambda_min = float(request.form.get("lambda_min"))
+    except (TypeError, ValueError):
+        pass
+    try:
+        lambda_max = float(request.form.get("lambda_max"))
+    except (TypeError, ValueError):
+        pass
+
+    parent_url = url_for("cannon_run", cannon=cannon)
+    self_url = url_for("scatter_spectrum", cannon=cannon)
+    txt_url = url_for("scatter_spectrum_txt", cannon=cannon)
+    data_url = url_for("scatter_spectrum_json", cannon=cannon)
+    png_url = url_for("scatter_spectrum_png", cannon=cannon, lambda_min=lambda_min, lambda_max=lambda_max)
+
+    return render_template('scatter_spectrum.html', path=args.path, cannon=cannon,
+                           parent_url=parent_url, txt_url=txt_url, data_url=data_url, png_url=png_url,
+                           self_url=self_url, lambda_min=lambda_min, lambda_max=lambda_max)
+
+
+# Output a particular scatter spectrum as a JSON file
+@app.route("/scatter_spectrum_json/<cannon>")
+def scatter_spectrum_json(cannon):
+    path_json = os_path.join(args.path, cannon)
+    path_cannon = re.sub(".json", ".cannon", path_json)
+
+    y = pickle.load(file=open(path_cannon))
+    data = zip(y['dispersion'], y['s2'])
+    return json.dumps(data)
+
+
+# Output a particular scatter spectrum as a JSON file
+@app.route("/scatter_spectrum_txt/<cannon>")
+def scatter_spectrum_txt(cannon):
+    path_json = os_path.join(args.path, cannon)
+    path_cannon = re.sub(".json", ".cannon", path_json)
+
+    y = pickle.load(file=open(path_cannon))
+    data = zip(y['dispersion'], y['s2'])
+
+    txt_output = StringIO.StringIO()
+    np.savetxt(txt_output, data)
+    response = make_response(txt_output.getvalue())
+    response.headers['Content-Type'] = 'text/plain'
+    return response
+
+
+# Output a particular scatter spectrum as a png file
+@app.route("/scatter_spectrum_png/<cannon>/<lambda_min>/<lambda_max>")
+def scatter_spectrum_png(cannon, lambda_min, lambda_max):
+    path_json = os_path.join(args.path, cannon)
+    path_cannon = re.sub(".json", ".cannon", path_json)
+
+    y = pickle.load(file=open(path_cannon))
+
+    fig = Figure(figsize=(16, 6))
+    ax = fig.add_subplot(111)
+    ax.set_xlabel('Wavelength / A')
+    ax.set_ylabel('Value')
+    ax.set_xlim([float(lambda_min), float(lambda_max)])
+    ax.grid(True)
+    ax.plot(y['dispersion'], y['s2'])
+    canvas = FigureCanvas(fig)
+    png_output = StringIO.StringIO()
+    canvas.print_png(png_output)
+    response = make_response(png_output.getvalue())
+    response.headers['Content-Type'] = 'image/png'
+    return response
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0" if args.public else "127.0.0.1")
