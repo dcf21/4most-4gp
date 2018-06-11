@@ -1,26 +1,32 @@
+The text on this page is a brief introduction to `4most-4gp`. For a more
+complete tutorial, please visit the
+[Wiki](https://github.com/dcf21/4most-4gp/wiki).
+
 # 4most-4gp
 
 This is the code for the IWG7 Galactic pipeline for the 4MOST multi-object
-spectrograph. It comprises a collection of Python modules which use a common data format to
-store and manipulate spectra and their associated metadata. It makes it easy to pass spectra
-between a range of spectral synthesis and processing tools including Turbospectrum, the
-4MOST Facility Simulator (4FS) and the Cannon, without the need for manual data format
-conversion. It includes the ability to store spectra in libraries and search for them by arbitrary
-metadata constraints, making it easy to create new tests on subgroups of stars filtered from
-larger samples.
+spectrograph. It comprises a collection of Python modules which use a common
+data format to store and manipulate spectra and their associated metadata. It
+makes it easy to pass spectra between a range of spectral synthesis and
+processing tools including Turbospectrum, the 4MOST Facility Simulator (4FS)
+and the Cannon, without the need for manual data format conversion. It includes
+the ability to store spectra in libraries and search for them by arbitrary
+metadata constraints, making it easy to create new tests on subgroups of stars
+filtered from larger samples.
 
-In addition, a simple web interface allows the contents of spectrum libraries to be searched
-and viewed quickly for diagnostic purposes.
+In addition, a simple web interface allows the contents of spectrum libraries
+to be searched and viewed quickly for diagnostic purposes.
 
-The framework is available in two repositories on GitHub, and includes step-by-step
-installation instructions. The first repository contains the Python modules which provide
-programmatic interfaces for creating and manipulating libraries of spectra, including wrappers
-for passing them to various analysis tools:
+The framework is available in two repositories on GitHub, and includes
+step-by-step installation instructions. The first repository contains the
+Python modules which provide programmatic interfaces for creating and
+manipulating libraries of spectra, including wrappers for passing them to
+various analysis tools:
 
 [https://github.com/dcf21/4most-4gp]
 
-The second repository contains python scripts which utilise these modules to synthesise the
-spectra and perform the tests described in this report:
+The second repository contains python scripts which utilise these modules to
+synthesise the spectra and perform the tests described in this report:
 
 [https://github.com/dcf21/4most-4gp-scripts]
 
@@ -41,8 +47,9 @@ and should be used with extreme caution.
 The code is organised into a collection of python modules, most of which do not
 depend on each other. These can be found in the directory `src/pythonModules`.
 
-The code is divided up in this way since each module has different dependencies,
-and it allows functions to be used without installing every dependency.
+The code is divided up in this way since each module has different
+dependencies, and it allows functions to be used without installing every
+dependency.
 
 It is strongly recommended that they be installed in the python virtual
 environment as described below, and that you do not tamper with your
@@ -66,17 +73,22 @@ The python modules are as follows:
 
 # Getting 4GP to do useful things
 
-All of this code in this repository is simply a collection of python modules which provide a programmatic interface for handling spectra. There is no example code here to show how to use these modules in practice.
+All of this code in this repository is simply a collection of python modules
+which provide a programmatic interface for handling spectra. There is no
+example code here to show how to use these modules in practice.
 
 Such examples can be found separately in the respository [4most-4gp-scripts](https://github.com/dcf21/4most-4gp-scripts).
 
 # Installing 4GP
 
-For more complete instructions, visit the [Wiki](https://github.com/dcf21/4most-4gp/wiki/dependencies) on our GitHib page.
+For complete instructions, please visit the
+[Wiki](https://github.com/dcf21/4most-4gp/wiki/dependencies) on our GitHib
+page.
 
 ## Dependencies
 
-Before you start, you need to have all the dependencies you need to build Turbospectrum, 4FS, and the other tools that 4GP wraps.
+Before you start, you need to have all the dependencies you need to build
+Turbospectrum, 4FS, and the other tools that 4GP wraps.
 
 4GP currently only runs on python 2.7.
 
@@ -103,7 +115,8 @@ The following packages are needed to run certain parts of 4GP:
 
 ## Ubuntu installation instructions
 
-Under Ubuntu Linux, you can install all these packages with a single command, as follows:
+Under Ubuntu Linux, you can install all these packages with a single command,
+as follows:
 
 Ubuntu 16.04:
 
@@ -122,12 +135,12 @@ Note that owing to this issue described on [StackOverflow](https://stackoverflow
 
 ## Installing 4GP in a python virtual environment
 
-4GP is distributed with a standard `setuptools` installation script `setup.py` which allows you to install its
-constituent modules into your local python environment.
+4GP is distributed with a standard `setuptools` installation script `setup.py`
+which allows you to install its constituent modules into your local python
+environment.
 
-We strongly recommended that you install them in a python virtual
-environment, rather than tampering with your
-system-wide python installation.
+We strongly recommended that you install them in a python virtual environment,
+rather than tampering with your system-wide python installation.
 
 Follow these steps in a Linux shell to do this:
 
@@ -170,12 +183,16 @@ make html
 
 You will probably also want to install Turbospectrum and 4FS.
 
-Your 4GP installation will need to know the paths to these tools so that it can invoke them as required. You can configure search paths whenever you invoke the wrappers for these tools.
+Your 4GP installation will need to know the paths to these tools so that it can
+invoke them as required. You can configure search paths whenever you invoke the
+wrappers for these tools.
 
 
 ### Installing the Cannon
 
-At the time of writing their are various branches of Annie's Lasso with different APIs. The following branch uses Andy Casey's latest development API, which is the one 4GP expects:
+At the time of writing their are various branches of Annie's Lasso with
+different APIs. The following branch uses Andy Casey's latest development API,
+which is the one 4GP expects:
 
 ```
 git clone https://github.com/dcf21/AnniesLasso.git
@@ -185,7 +202,9 @@ python setup.py install
 
 ### Installing pyphot
 
-The pyphot source code can be obtained from a GitHub repository. We maintain our own fork of the repository with branches labelled `release-2018-01-12-1`, etc, to indicate versions which are compatible with each release of 4GP.
+The pyphot source code can be obtained from a GitHub repository. We maintain
+our own fork of the repository with branches labelled `release-2018-01-12-1`,
+etc, to indicate versions which are compatible with each release of 4GP.
 
 ```
 git clone https://github.com/dcf21/pyphot.git
@@ -195,7 +214,8 @@ python setup.py install
 
 ### Installing Turbospectrum
 
-If you want to synthesize spectra using Turbospectrum, the following commands will download and install it for you.
+If you want to synthesize spectra using Turbospectrum, the following commands
+will download and install it for you.
 
 Download the code, as follows:
 
@@ -323,3 +343,4 @@ Lund Observatory
 Box 43  
 SE-221 00 Lund  
 Sweden
+
