@@ -166,7 +166,9 @@ class SpectrumResampler(object):
 
         output = Spectrum(wavelengths=output_raster,
                           values=new_values,
-                          value_errors=new_value_errors)
+                          value_errors=new_value_errors,
+                          metadata=self._input.metadata.copy()
+                          )
 
         if resample_mask and self._input.mask_set:
             output.mask = self._resample(x_new=output_raster,

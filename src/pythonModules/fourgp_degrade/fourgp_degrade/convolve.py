@@ -30,7 +30,9 @@ class SpectrumConvolver(object):
 
         output = Spectrum(wavelengths=self._input.wavelengths,
                           values=new_values,
-                          value_errors=self._input.value_errors)
+                          value_errors=self._input.value_errors,
+                          metadata=self._input.metadata.copy()
+                          )
 
         if self._input.mask_set:
             output.copy_mask_from(self._input)

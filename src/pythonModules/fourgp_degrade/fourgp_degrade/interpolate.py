@@ -47,7 +47,9 @@ class SpectrumInterpolator(object):
 
         output = Spectrum(wavelengths=output_raster,
                           values=new_values,
-                          value_errors=new_value_errors)
+                          value_errors=new_value_errors,
+                          metadata=self._input.metadata.copy()
+                          )
 
         if interpolate_mask and self._input.mask_set:
             output.mask = np.interp(x=output_raster,
