@@ -11,7 +11,7 @@ from astropy.table import Table
 import thecannon as tc
 
 import fourgp_speclib
-from fourgp_degrade import SpectrumInterpolator
+from fourgp_degrade import SpectrumResampler
 
 logger = logging.getLogger(__name__)
 
@@ -500,9 +500,9 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
 
                 # logger.info("Best-fit polynomial coefficients: {}".format(continuum_smooth.coefficients))
 
-                # Interpolate smooth function onto the full raster of pixels within this wavelength arm
-                interpolator = SpectrumInterpolator(input_spectrum=continuum_smooth)
-                continuum_models.append(interpolator.onto_raster(raster[arm_raster]))
+                # Resample smooth function onto the full raster of pixels within this wavelength arm
+                resampler = SpectrumResampler(input_spectrum=continuum_smooth)
+                continuum_models.append(resampler.onto_raster(raster[arm_raster]))
 
             # Splice together the continuum in all the wavelength arms
             continuum_model = fourgp_speclib.spectrum_splice(*continuum_models)

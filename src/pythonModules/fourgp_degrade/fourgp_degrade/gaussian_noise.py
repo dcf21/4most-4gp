@@ -13,7 +13,7 @@ import logging
 
 from fourgp_speclib import Spectrum
 from .convolve import SpectrumConvolver
-from .interpolate import SpectrumInterpolator
+from .resample import SpectrumResampler
 
 logger = logging.getLogger(__name__)
 
@@ -122,9 +122,9 @@ class GaussianNoise:
                 for (raster, pixel_spacing) in self.wavelength_arms:
                     convolver = SpectrumConvolver(item)
                     convolved = convolver.gaussian_convolve(pixel_spacing)
-                    interpolator = SpectrumInterpolator(convolved)
-                    interpolated = interpolator.onto_raster(raster)
-                    resampled_spectrum[-1].append(interpolated.values)
+                    resampler = SpectrumResampler(convolved)
+                    resampled = resampler.onto_raster(raster)
+                    resampled_spectrum[-1].append(resampled.values)
 
             # Calculate fake continuum
             continuum_per_arm = []

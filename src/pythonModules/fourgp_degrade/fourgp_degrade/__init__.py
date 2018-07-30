@@ -7,6 +7,7 @@ from warnings import simplefilter
 
 from .convolve import SpectrumConvolver
 from .interpolate import SpectrumInterpolator
+from .resample import SpectrumResampler
 from .gaussian_noise import GaussianNoise
 from .redden import SpectrumReddener
 
