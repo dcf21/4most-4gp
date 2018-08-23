@@ -55,6 +55,7 @@ class CannonInstance_2018_01_09(object):
 
         self._debugging_output_counter = 0
         self._debugging = debugging
+        self.cannon_version = tc.__version__
         self._wavelength_arms = wavelength_arms
         logger.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
 

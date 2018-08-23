@@ -18,6 +18,16 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def suppress_stdout(allow_progressbar):
+    """
+    The Cannon has a really annoying habit to draw progress bars, even if you're piping output to a file. And there's no
+    switch to turn it off. The result is gigabytes of crap in your log files. Thanks, guys. This is a helper class to
+    temporarily send stdout to </dev/null> while Dr Casey floods it.
+
+    :param allow_progressbar:
+        Boolean which lets you select whether you want gigabytes of crap or not.
+    :return:
+        None
+    """
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
         if not allow_progressbar:
@@ -70,6 +80,7 @@ class CannonInstance(object):
 
         self._debugging_output_counter = 0
         self._debugging = debugging
+        self.cannon_version = tc.__version__
         self._wavelength_arms = wavelength_arms
         logger.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
 

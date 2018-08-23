@@ -12,7 +12,7 @@ from warnings import simplefilter
 from .turbospectrum import TurboSpectrum
 from .solar_abundances import solar_abundances
 
-__version__ = "0.1.0"
+__version__ = "release-2019-09-01-01"
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # TODO: Remove this when stable.

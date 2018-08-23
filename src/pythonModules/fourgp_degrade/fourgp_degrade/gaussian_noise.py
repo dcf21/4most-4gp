@@ -14,6 +14,7 @@ import logging
 from fourgp_speclib import Spectrum
 from .convolve import SpectrumConvolver
 from .resample import SpectrumResampler
+from .spectrum_properties import SpectrumProperties
 
 logger = logging.getLogger(__name__)
 
@@ -42,41 +43,20 @@ class GaussianNoise:
             List of the SNR definitions to use for each wavelength arm.
         """
 
-        # Process wavelength raster into spectral arms
+        # Divide wavelength raster into spectral arms, which have distinct pixel spacing
+        # We convolve each wavelength arm separately
+        self.wavelength_arms = SpectrumProperties(wavelength_raster).wavelength_arms()['wavelength_arms']
         self.wavelength_raster = wavelength_raster
-        self.wavelength_arms = []
 
-        wavelength_old = wavelength_raster[0]
-        wavelength_delta = None
-        arm_raster = [wavelength_raster[0]]
-        arm_pixel_gaps = []
-        for i in range(1, len(wavelength_raster)):
-            wavelength_delta_new = wavelength_raster[i] - wavelength_old
-            wavelength_old = wavelength_raster[i]
-            if wavelength_delta is not None:
-                ratio = wavelength_delta_new / wavelength_delta
-                if ratio < 1:
-                    ratio = 1 / ratio
-                if ratio > 1.05:
-                    mean_interval = np.mean(np.asarray(arm_pixel_gaps))
-                    self.wavelength_arms.append([np.asarray(arm_raster), mean_interval])
-                    wavelength_delta = None
-                    arm_raster = [wavelength_raster[i]]
-                    arm_pixel_gaps = []
-                    continue
-            wavelength_delta = wavelength_delta_new
-            arm_raster.append(wavelength_raster[i])
-            arm_pixel_gaps.append(wavelength_delta_new)
+        logger.info("Detected {} wavelength arms".format(len(self.wavelength_arms)))
 
-        # Add final wavelength arm to self.wavelength_arms
-        mean_interval = np.mean(np.asarray(arm_pixel_gaps))
-        self.wavelength_arms.append([np.asarray(arm_raster), mean_interval])
-
-        # Process SNR definitions
+        # Read the list of SNRs that we have been requested to degrade spectra to
         if snr_list is None:
-            snr_list = (10, 20, 50, 80, 100, 130, 180, 250, 5000)
+            # Default list
+            snr_list = (10, 12, 14, 16, 18, 20, 23, 26, 30, 35, 40, 45, 50, 80, 100, 130, 180, 250)
         self.snr_list = snr_list
 
+        # Read the list of SNR definitions supplied, or default to using a window between 6180 and 6680 A
         if snr_definitions is None:
             snr_definitions = [("MEDIANSNR", 6180, 6680)]
 
@@ -85,8 +65,6 @@ class GaussianNoise:
 
         self.snr_definitions = snr_definitions
         self.use_snr_definitions = use_snr_definitions
-
-        logger.info("Detected {} wavelength arms".format(len(self.wavelength_arms)))
 
         assert len(self.use_snr_definitions) == len(self.wavelength_arms), \
             "Need an SNR definition for each wavelength arm. " \
@@ -126,13 +104,13 @@ class GaussianNoise:
                     resampled = resampler.onto_raster(raster)
                     resampled_spectrum[-1].append(resampled.values)
 
-            # Calculate fake continuum
+            # Calculate continuum spectrum by dividing the flux normalised spectrum by continuum normalised spectrum
             continuum_per_arm = []
             for index_arm in range(len(self.wavelength_arms)):
                 continuum_per_arm.append(resampled_spectrum[0][index_arm] / resampled_spectrum[1][index_arm])
             continuum = np.concatenate(continuum_per_arm)
 
-            # Measure signal in range
+            # Measure the integrated signal within the range of each SNR definition
             mean_signal_per_pixel = {}
             for snr_definition_name, wavelength_min, wavelength_max in self.snr_definitions:
                 indices = (wavelength_min <= self.wavelength_raster) * (self.wavelength_raster <= wavelength_max)
@@ -140,7 +118,7 @@ class GaussianNoise:
                 pixel_sum = np.sum(continuum[indices])
                 mean_signal_per_pixel[snr_definition_name] = pixel_sum / pixel_count
 
-            # Add noise to spectra
+            # Add noise to spectra at each SNR in turn
             output_item = {}
             output.append(output_item)
             for snr_value in self.snr_list:
@@ -161,21 +139,21 @@ class GaussianNoise:
                                              scale=noise_level,
                                              size=arm_length)
 
-                    # Add noise into signal (not the continuum normalised version)
+                    # Add noise into flux-normalised spectrum
                     noised_signal = resampled_spectrum[0][index_arm] + noise
                     noised_signal_errors = np.ones_like(noised_signal) * noise_level
 
-                    # Compute the new continuum-normalised spectrum based on the noised signal
+                    # Compute the new continuum-normalised spectrum by dividing by the pure continuum we computed
                     noised_signal_cn = noised_signal / continuum_per_arm[index_arm]
                     noised_signal_errors_cn = noised_signal_errors / continuum_per_arm[index_arm]
 
-                    # Append the various wavelength arms together
+                    # Concatenate the various wavelength arms together
                     output_values = np.append(output_values, noised_signal)
                     output_value_errors = np.append(output_value_errors, noised_signal_errors)
                     output_values_cn = np.append(output_values_cn, noised_signal_cn)
                     output_value_errors_cn = np.append(output_value_errors_cn, noised_signal_errors_cn)
 
-                # Convert output signal into a spectrum object
+                # Convert output spectra into Spectrum objects
                 metadata = spectrum[0].metadata.copy()
                 metadata['continuum_normalised'] = 0
                 metadata['SNR'] = float(snr_value)
@@ -194,5 +172,5 @@ class GaussianNoise:
                 output_item[snr_value] = (output_spectrum, output_spectrum_cn)
 
         # Return output spectra to user
-        # output[ spectrum_number ][ snr ] = [ full_spectrum, continuum normalised ]
+        # output[ spectrum_number ][ snr ] = [ flux normalised , continuum normalised ]
         return output

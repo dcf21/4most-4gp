@@ -82,10 +82,13 @@ class FourFS:
         self.template_counter = 0
         self.metadata_store = {}
 
+        # Read the list of SNRs that we have been requested to degrade spectra to
         if snr_list is None:
-            snr_list = (10,12,14,16,18,20,23,26,30,35,40,45,50,80,100,130,180,250)
+            # Default list
+            snr_list = (10, 12, 14, 16, 18, 20, 23, 26, 30, 35, 40, 45, 50, 80, 100, 130, 180, 250)
         self.snr_list = snr_list
 
+        # Read the list of SNR definitions supplied, or default to using a window between 6180 and 6680 A
         if snr_definitions is None:
             snr_definitions = [("MEDIANSNR", 6180, 6680)]
 
@@ -458,7 +461,7 @@ class FourFS:
 
                 # Load continuum spectra
                 continuum_filenames = [os_path.join(path, 'specout_template_template_{}_c_{}_{}.fits'.
-                                                   format(i, setup, band)) for band in bands]
+                                                    format(i, setup, band)) for band in bands]
                 have_continuum_version = os.path.exists(continuum_filenames[0])
 
                 if have_continuum_version:
