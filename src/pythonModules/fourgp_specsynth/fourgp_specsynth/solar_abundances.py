@@ -1,8 +1,12 @@
 #!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
-# These solar abundance values were supplied by Bengt Edvardsson, June 2017
-# Source: Grevesse et al. 2007, Space Sci Rev 130,105
+"""
+A list of solar abundances.
+
+These values were supplied by Bengt Edvardsson, June 2017
+Source: Grevesse et al. 2007, Space Sci Rev 130,105
+"""
 
 solar_abundances = {
     "STD?": "T",

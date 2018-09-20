@@ -2,7 +2,10 @@
 # -*- coding: utf-8 -*-
 
 """
-A class which wraps Turbospectrum
+A class which wraps Turbospectrum.
+
+This wrapper currently does not include any provision for macro-turbulence, which should be applied subsequently, by
+convolving the output spectrum with some appropriate line spread function.
 """
 
 import subprocess
@@ -20,8 +23,17 @@ logger = logging.getLogger(__name__)
 
 
 class TurboSpectrum:
+    """
+    A class which wraps Turbospectrum.
+
+    This wrapper currently does not include any provision for macro-turbulence, which should be applied subsequently, by
+    convolving the output spectrum with some appropriate line spread function.
+    """
 
     # Default MARCS model settings to look for. These are fixed parameters which we don't (currently) allow user to vary
+
+    # In this context, "turbulence" refers to the micro turbulence assumed in the MARCS atmosphere. It should closely
+    # match the micro turbulence value passed to babsma below.
     marcs_parameters = {"turbulence": 2, "model_type": "st",
                         "a": 0, "c": 0, "n": 0, "o": 0, "r": 0, "s": 0}
 
@@ -72,14 +84,14 @@ class TurboSpectrum:
         self.marcs_grid_path = marcs_grid_path
 
         # Default spectrum parameters
-        self.lambda_min = 5100
+        self.lambda_min = 5100  # Angstrom
         self.lambda_max = 5200
         self.lambda_delta = 0.05
         self.metallicity = -1.5
         self.stellar_mass = 1
         self.log_g = 0
         self.t_eff = 5000
-        self.turbulent_velocity = 1.0
+        self.turbulent_velocity = 1.0  # micro turbulence, km/s
         self.free_abundances = None
         self.sphere = None
         self.alpha = None
@@ -103,6 +115,12 @@ class TurboSpectrum:
         self._fetch_marcs_grid()
 
     def close(self):
+        """
+        Clean up temporary files created by this wrapper to Turbospectrum.
+
+        :return:
+            None
+        """
         # Remove temporary directory
         os.system("rm -Rf {}".format(self.tmp_dir))
 
@@ -122,7 +140,7 @@ class TurboSpectrum:
             "metallicity": [], "a": [], "c": [], "n": [], "o": [], "r": [], "s": []
         }
 
-        self.marcs_value_keys = [ i for i in self.marcs_values.keys() if i not in self.marcs_parameters_to_ignore ]
+        self.marcs_value_keys = [i for i in self.marcs_values.keys() if i not in self.marcs_parameters_to_ignore]
         self.marcs_value_keys.sort()
         self.marcs_models = {}
 
@@ -140,7 +158,7 @@ class TurboSpectrum:
                     "temperature": float(re_test.group(2)),
                     "log_g": float(re_test.group(3)),
                     "mass": float(re_test.group(4)),
-                    "turbulence": float(re_test.group(5)),
+                    "turbulence": float(re_test.group(5)),  # micro turbulence assumed in MARCS atmosphere, km/s
                     "model_type": re_test.group(6),
                     "metallicity": float(re_test.group(7)),
                     "a": float(re_test.group(8)),
@@ -200,7 +218,7 @@ class TurboSpectrum:
         :param stellar_mass:
             Mass of the star we're synthesizing (solar masses).
         :param turbulent_velocity:
-            Turbulent velocity in km/s
+            Micro turbulence velocity in km/s
         :param free_abundances:
             List of elemental abundances to use in stellar model. These are passed to Turbospectrum.
         :param sphere:
