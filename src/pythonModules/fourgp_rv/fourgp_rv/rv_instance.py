@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 import numpy as np
@@ -87,7 +86,7 @@ class RvInstance(object):
                 format(self.expected_number_spectra, len(spectrum_list))
 
         # Check that the template spectra are sampled on the right grid
-        grid_axis_indices = [range(int((axis[2] - axis[1]) / axis[3])) for axis in self.grid_axes]
+        grid_axis_indices = [list(range(int((axis[2] - axis[1]) / axis[3]))) for axis in self.grid_axes]
         grid_axis_index_combinations = itertools.product(*grid_axis_indices)
 
         # Check that each grid point in turn exists

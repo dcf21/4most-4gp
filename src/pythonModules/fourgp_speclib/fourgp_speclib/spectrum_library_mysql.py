@@ -1,10 +1,9 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 import re
 import MySQLdb
 
-from spectrum_library_sql import SpectrumLibrarySql
+from .spectrum_library_sql import SpectrumLibrarySql
 
 
 class SpectrumLibraryMySql(SpectrumLibrarySql):

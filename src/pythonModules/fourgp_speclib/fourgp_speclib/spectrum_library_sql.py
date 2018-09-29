@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 import os
@@ -9,9 +8,9 @@ import json
 import hashlib
 import logging
 
-from spectrum_library import SpectrumLibrary, requires_ids_or_filenames
-from spectrum_array import SpectrumArray
-from spectrum import Spectrum
+from .spectrum_library import SpectrumLibrary, requires_ids_or_filenames
+from .spectrum_array import SpectrumArray
+from .spectrum import Spectrum
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +163,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
                 elif library_props['format'] == 'bin':
                     self._binary_spectra = True
                 elif library_props['format'] != 'txt':
-                    raise ValueError, "Unexpected data format <{}>".format(library_props['format'])
+                    raise ValueError("Unexpected data format <{}>".format(library_props['format']))
 
         except (IOError, KeyError, ValueError):
             logger.error("Spectrum library did not have required header files.")
@@ -504,7 +503,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
         criteria_params = [self._library_id]
 
         # Loop over metadata constraints
-        for key, search_range in kwargs.iteritems():
+        for key, search_range in kwargs.items():
 
             # Check that requested metadata field exists
             assert key in self._metadata_fields, "Unknown metadata field <{}>.".format(key)
@@ -634,13 +633,13 @@ WHERE i.libraryId=? AND i.specId=?;
             ids = self._filenames_to_ids(filenames=filenames)
 
         # Loop over the metadata fields we are to set
-        for key, value in metadata.iteritems():
+        for key, value in metadata.items():
 
             # Look up the numeric id for this metadata field
             keyId = self._fetch_metadata_field_id(name=key)
 
             # Create a big table of parameters to substitute into an SQL query, acting on every spectrum at once
-            query_data = zip([self._library_id] * len(ids), ids, [keyId] * len(ids), [value] * len(ids))
+            query_data = list(zip([self._library_id] * len(ids), ids, [keyId] * len(ids), [value] * len(ids)))
 
             # If this metadata item has a numeric value, we store it in the SQL field <valueFloat>
             if isinstance(value, (int, float)):

@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 import os
@@ -111,7 +110,7 @@ class CannonInstance(object):
             for label in label_names:
                 assert label in metadata, "Label <{}> not set on training spectrum number {}. " \
                                           "Labels on this spectrum are: {}.".format(
-                    label, index, ", ".join(metadata.keys()))
+                    label, index, ", ".join(list(metadata.keys())))
                 assert np.isfinite(metadata[label]), "Label <{}> is not finite on training spectrum number {}. " \
                                                      "Labels on this spectrum are: {}.".format(
                     label, index, metadata)
@@ -505,7 +504,7 @@ class CannonInstanceWithContinuumNormalisation(CannonInstance):
                     mask=np.ones_like(continuum_raster, dtype=bool)
                 )
 
-                if isinstance(continuum_smooth, basestring):
+                if isinstance(continuum_smooth, str):
                     logger.info(continuum_smooth)
                     return None, None, None, None, None, None
 

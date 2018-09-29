@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 from os import path as os_path
@@ -9,7 +9,7 @@ import re
 import glob
 import json
 import pickle
-import StringIO
+import io
 import numpy as np
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -49,13 +49,13 @@ def cannon_index():
     # For each library, look up how many spectra are inside it, and create a dictionary of properties
     cannon_info = []
     for item in cannon_runs:
-            name = os_path.split(item)[1]
-            file_time = os_path.getmtime(item)
-            cannon_info.append({
-                'name': name,
-                'url': url_for('cannon_run', cannon=name),
-                'item_time': datetime.datetime.fromtimestamp(file_time).strftime('%Y-%m-%d %H:%M:%S')
-            })
+        name = os_path.split(item)[1]
+        file_time = os_path.getmtime(item)
+        cannon_info.append({
+            'name': name,
+            'url': url_for('cannon_run', cannon=name),
+            'item_time': datetime.datetime.fromtimestamp(file_time).strftime('%Y-%m-%d %H:%M:%S')
+        })
 
     # Render list of SpectrumLibraries into HTML
     return render_template('index.html', path=args.path, cannon_runs=cannon_info)
@@ -76,7 +76,7 @@ def cannon_run(cannon):
         {
             "key": "Training library",
             "value": x["train_library"]
-         }, {
+        }, {
             "key": "Test library",
             "value": x["test_library"]
         }, {
@@ -150,7 +150,8 @@ def coefficient_spectrum(cannon, term):
     self_url = url_for("coefficient_spectrum", cannon=cannon, term=term)
     txt_url = url_for("coefficient_spectrum_txt", cannon=cannon, term=term)
     data_url = url_for("coefficient_spectrum_json", cannon=cannon, term=term)
-    png_url = url_for("coefficient_spectrum_png", cannon=cannon, term=term, lambda_min=lambda_min, lambda_max=lambda_max)
+    png_url = url_for("coefficient_spectrum_png", cannon=cannon, term=term, lambda_min=lambda_min,
+                      lambda_max=lambda_max)
 
     return render_template('coefficient_spectrum.html', path=args.path, cannon=cannon, term_name=term_name,
                            parent_url=parent_url, txt_url=txt_url, data_url=data_url, png_url=png_url,
@@ -164,7 +165,7 @@ def coefficient_spectrum_json(cannon, term):
     path_cannon = re.sub(".json", ".cannon", path_json)
 
     y = pickle.load(file=open(path_cannon))
-    data = zip(y['dispersion'], y['theta'][:,int(term)])
+    data = list(zip(y['dispersion'], y['theta'][:, int(term)]))
     return json.dumps(data)
 
 
@@ -175,9 +176,9 @@ def coefficient_spectrum_txt(cannon, term):
     path_cannon = re.sub(".json", ".cannon", path_json)
 
     y = pickle.load(file=open(path_cannon))
-    data = zip(y['dispersion'], y['theta'][:,int(term)])
+    data = list(zip(y['dispersion'], y['theta'][:, int(term)]))
 
-    txt_output = StringIO.StringIO()
+    txt_output = io.StringIO()
     np.savetxt(txt_output, data)
     response = make_response(txt_output.getvalue())
     response.headers['Content-Type'] = 'text/plain'
@@ -198,9 +199,9 @@ def coefficient_spectrum_png(cannon, term, lambda_min, lambda_max):
     ax.set_ylabel('Value')
     ax.set_xlim([float(lambda_min), float(lambda_max)])
     ax.grid(True)
-    ax.plot(y['dispersion'], y['theta'][:,int(term)])
+    ax.plot(y['dispersion'], y['theta'][:, int(term)])
     canvas = FigureCanvas(fig)
-    png_output = StringIO.StringIO()
+    png_output = io.StringIO()
     canvas.print_png(png_output)
     response = make_response(png_output.getvalue())
     response.headers['Content-Type'] = 'image/png'
@@ -242,7 +243,7 @@ def scatter_spectrum_json(cannon):
     path_cannon = re.sub(".json", ".cannon", path_json)
 
     y = pickle.load(file=open(path_cannon))
-    data = zip(y['dispersion'], y['s2'])
+    data = list(zip(y['dispersion'], y['s2']))
     return json.dumps(data)
 
 
@@ -253,9 +254,9 @@ def scatter_spectrum_txt(cannon):
     path_cannon = re.sub(".json", ".cannon", path_json)
 
     y = pickle.load(file=open(path_cannon))
-    data = zip(y['dispersion'], y['s2'])
+    data = list(zip(y['dispersion'], y['s2']))
 
-    txt_output = StringIO.StringIO()
+    txt_output = io.StringIO()
     np.savetxt(txt_output, data)
     response = make_response(txt_output.getvalue())
     response.headers['Content-Type'] = 'text/plain'
@@ -278,7 +279,7 @@ def scatter_spectrum_png(cannon, lambda_min, lambda_max):
     ax.grid(True)
     ax.plot(y['dispersion'], y['s2'])
     canvas = FigureCanvas(fig)
-    png_output = StringIO.StringIO()
+    png_output = io.StringIO()
     canvas.print_png(png_output)
     response = make_response(png_output.getvalue())
     response.headers['Content-Type'] = 'image/png'

@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 """
@@ -17,7 +16,7 @@ import glob
 import logging
 from operator import itemgetter
 
-from solar_abundances import solar_abundances, periodic_table
+from .solar_abundances import solar_abundances, periodic_table
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +139,7 @@ class TurboSpectrum:
             "metallicity": [], "a": [], "c": [], "n": [], "o": [], "r": [], "s": []
         }
 
-        self.marcs_value_keys = [i for i in self.marcs_values.keys() if i not in self.marcs_parameters_to_ignore]
+        self.marcs_value_keys = [i for i in list(self.marcs_values.keys()) if i not in self.marcs_parameters_to_ignore]
         self.marcs_value_keys.sort()
         self.marcs_models = {}
 
@@ -173,7 +172,7 @@ class TurboSpectrum:
                 raise
 
             # Keep a list of all of the parameter values we've seen
-            for parameter, value in model.iteritems():
+            for parameter, value in model.items():
                 if value not in self.marcs_values[parameter]:
                     self.marcs_values[parameter].append(value)
 
@@ -380,7 +379,7 @@ class TurboSpectrum:
                     dict_iter = dict_iter['filename']
                 except KeyError:
                     # We get a KeyError if there is no model matching the parameter combination we tried
-                    failed_on_parameter = (parameter, value, dict_iter.keys())
+                    failed_on_parameter = (parameter, value, list(dict_iter.keys()))
                     dict_iter = None
                     failures += 1
                 marcs_model_list.append(dict_iter)
@@ -505,7 +504,7 @@ class TurboSpectrum:
         else:
             individual_abundances = "'INDIVIDUAL ABUNDANCES:'   '{:d}'\n".format(len(self.free_abundances))
 
-            for element, abundance in self.free_abundances.iteritems():
+            for element, abundance in self.free_abundances.items():
                 assert element in solar_abundances, "Cannot proceed as solar abundance for element <{}> is unknown". \
                     format(element)
 

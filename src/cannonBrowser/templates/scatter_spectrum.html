@@ -16,19 +16,20 @@
     A to
     <input style="width:80px;" type="text" name="lambda_max" value="{{lambda_max}}"/>
     A.
-    <input class="btn btn-sm btn-primary" style="margin:20px 0; vertical-align: middle;" type="submit" value="Update..."/>
+    <input class="btn btn-sm btn-primary" style="margin:20px 0; vertical-align: middle;" type="submit"
+           value="Update..."/>
 </form>
 
 <img src="{{png_url}}">
 
 <div>
-<form method="get" action="{{txt_url}}">
-<input style="margin:16px;" type="submit" name="Download as text" value="Download as text" />
-</form>
+    <form method="get" action="{{txt_url}}">
+        <input style="margin:16px;" type="submit" name="Download as text" value="Download as text"/>
+    </form>
 
-<form method="get" action="{{data_url}}">
-<input style="margin:16px;" type="submit" name="Download as JSON" value="Download as JSON" />
-</form>
+    <form method="get" action="{{data_url}}">
+        <input style="margin:16px;" type="submit" name="Download as JSON" value="Download as JSON"/>
+    </form>
 </div>
 
 {% endblock %}

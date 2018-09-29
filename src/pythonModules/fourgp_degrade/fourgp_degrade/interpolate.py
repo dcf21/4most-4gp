@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 import numpy as np
@@ -12,7 +11,8 @@ class SpectrumInterpolator(object):
     """
 
     def __init__(self, input_spectrum):
-        assert isinstance(input_spectrum, Spectrum), "The SpectrumInterpolate class can only operate on Spectrum objects."
+        assert isinstance(input_spectrum,
+                          Spectrum), "The SpectrumInterpolate class can only operate on Spectrum objects."
         self._input = input_spectrum
 
     def onto_raster(self, output_raster, interpolate_errors=True, interpolate_mask=True):

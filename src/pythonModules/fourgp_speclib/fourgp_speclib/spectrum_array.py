@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 from os import path as os_path
@@ -7,7 +6,7 @@ import logging
 from ctypes import c_double
 from multiprocessing.sharedctypes import RawArray
 
-from spectrum import hash_numpy_array, Spectrum
+from .spectrum import hash_numpy_array, Spectrum
 
 logger = logging.getLogger(__name__)
 

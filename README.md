@@ -126,13 +126,13 @@ as follows:
 Ubuntu 16.04:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk python-matplotlib sqlite3 python-dev pyxplot
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk python-matplotlib sqlite3 python3-dev pyxplot
 ```
 
 Ubuntu 14.04:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk python-matplotlib sqlite3 python-dev pyxplot
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk python-matplotlib sqlite3 python3-dev pyxplot
 apt-get build-dep python-matplotlib
 ```
 
@@ -154,12 +154,12 @@ Follow these steps in a Linux shell to do this:
 git clone https://github.com/dcf21/4most-4gp.git
  
 # Set up a python virtual environment
-virtualenv virtualenv
+virtualenv -p python3 virtualenv
 source virtualenv/bin/activate
-pip install numpy scipy astropy MySQL-python flask matplotlib tables
+pip install numpy scipy astropy mysqlclient flask matplotlib tables
  
 # Install 4GP code
-cd src/pythonModules/fourgp_speclib
+cd 4most-4gp/src/pythonModules/fourgp_speclib
 python setup.py install
 cd ../fourgp_cannon
 python setup.py install

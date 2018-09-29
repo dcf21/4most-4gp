@@ -19,6 +19,7 @@ def read(filename):
         contents = fp.read()
     return contents
 
+
 # Get the version information.
 here = path.abspath(path.dirname(__file__))
 vre = re_compile("__version__ = \"(.*?)\"")
@@ -38,8 +39,7 @@ setup(
         "Intended Audience :: Science/Research",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.4",
+        "Programming Language :: Python :: 3.5",
         "Topic :: Scientific/Engineering :: Astronomy",
         "Topic :: Scientific/Engineering :: Physics"
     ],

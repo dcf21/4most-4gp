@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 from os import path as os_path
@@ -44,6 +43,7 @@ def requires_common_raster(method):
         return method(spectrum, other=other, *args, **kwargs)
 
     return wrapper
+
 
 def spectrum_splice(*spectra):
     """

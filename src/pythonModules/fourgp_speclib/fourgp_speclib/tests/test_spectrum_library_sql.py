@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -75,7 +75,7 @@ class TestSpectrumLibrarySQL(object):
 
         # Insert ten random spectra into SpectrumLibrary
         size = 50
-        x_values = range(10)
+        x_values = list(range(10))
         for x in x_values:
             input_spectrum = fourgp_speclib.Spectrum(wavelengths=np.arange(size),
                                                      values=np.random.random(size),
@@ -102,7 +102,7 @@ class TestSpectrumLibrarySQL(object):
 
         # Insert ten random spectra into SpectrumLibrary
         size = 50
-        x_values = range(10)
+        x_values = list(range(10))
         for x in x_values:
             input_spectrum = fourgp_speclib.Spectrum(wavelengths=np.arange(size),
                                                      values=np.random.random(size),
@@ -128,7 +128,7 @@ class TestSpectrumLibrarySQL(object):
         # Insert random spectra into SpectrumLibrary
         alphabet = "abcdefghijklmnopqrstuvwxyz"
         size = 50
-        x_values = range(12)
+        x_values = list(range(12))
         for x in x_values:
             input_spectrum = fourgp_speclib.Spectrum(wavelengths=np.arange(size),
                                                      values=np.random.random(size),
@@ -155,7 +155,7 @@ class TestSpectrumLibrarySQL(object):
         # Insert random spectra into SpectrumLibrary
         alphabet = "abcdefghijklmnopqrstuvwxyz"
         size = 50
-        x_values = range(10)
+        x_values = list(range(10))
         for x in x_values:
             input_spectrum = fourgp_speclib.Spectrum(wavelengths=np.arange(size),
                                                      values=np.random.random(size),

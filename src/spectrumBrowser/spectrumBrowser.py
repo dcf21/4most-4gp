@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 from os import path as os_path
@@ -6,7 +6,7 @@ from flask import Flask, render_template, url_for, request, make_response
 import argparse
 import glob
 import json
-import StringIO
+import io
 import numpy as np
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -101,7 +101,7 @@ def library_search(library):
             # Create a new numeric metadata constraint
             if not string_constraint:
                 constraints[item] = ((lower_limit_float, upper_limit_float) if lower_limit_float != upper_limit_float
-                else lower_limit_float)
+                                     else lower_limit_float)
 
             # Create a new string metadata constraint
             else:
@@ -168,7 +168,7 @@ def spectrum_json(library, spec_id):
     x = SpectrumLibrarySqlite(path=path)
     spectrum = x.open(ids=int(spec_id)).extract_item(0)
 
-    data = zip(spectrum.wavelengths, spectrum.values)
+    data = list(zip(spectrum.wavelengths, spectrum.values))
     return json.dumps(data)
 
 
@@ -178,9 +178,9 @@ def spectrum_txt(library, spec_id):
     path = os_path.join(args.path, library)
     x = SpectrumLibrarySqlite(path=path)
     spectrum = x.open(ids=int(spec_id)).extract_item(0)
-    data = np.asarray(zip(spectrum.wavelengths, spectrum.values, spectrum.value_errors))
+    data = np.asarray(list(zip(spectrum.wavelengths, spectrum.values, spectrum.value_errors)))
 
-    txt_output = StringIO.StringIO()
+    txt_output = io.StringIO()
     np.savetxt(txt_output, data)
     response = make_response(txt_output.getvalue())
     response.headers['Content-Type'] = 'text/plain'
@@ -202,7 +202,7 @@ def spectrum_png(library, spec_id, lambda_min, lambda_max):
     ax.grid(True)
     ax.plot(spectrum.wavelengths, spectrum.values)
     canvas = FigureCanvas(fig)
-    png_output = StringIO.StringIO()
+    png_output = io.StringIO()
     canvas.print_png(png_output)
     response = make_response(png_output.getvalue())
     response.headers['Content-Type'] = 'image/png'

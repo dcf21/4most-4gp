@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 import os
@@ -6,7 +5,7 @@ from os import path as os_path
 import re
 import sqlite3
 
-from spectrum_library_sql import SpectrumLibrarySql
+from .spectrum_library_sql import SpectrumLibrarySql
 
 
 class SpectrumLibrarySqlite(SpectrumLibrarySql):
@@ -70,7 +69,7 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
         # Create SQLite database to hold metadata about the spectra in this library
         db_path = os_path.join(self._path, self._index_file_name)
 
-        assert not os_path.exists(db_path),\
+        assert not os_path.exists(db_path), \
             "Attempting to overwrite SQLite database <{}> that already exists.".format(db_path)
 
         # SQLite databases work faster if primary keys don't auto increment, so remove keyword from schema
@@ -84,7 +83,7 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
     def _open_database(self):
         self._path_db = os_path.join(self._path, self._index_file_name)
 
-        assert os_path.exists(self._path_db),\
+        assert os_path.exists(self._path_db), \
             "Attempting to open an SQLite database <{}> that doesn't exist.".format(self._path_db)
 
         self._db = sqlite3.connect(self._path_db)
@@ -112,4 +111,3 @@ class SpectrumLibrarySqlite(SpectrumLibrarySql):
 
     def _parameterised_query_many(self, sql, parameters=None):
         self._db_cursor.executemany(sql, parameters)
-

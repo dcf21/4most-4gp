@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import logging
@@ -18,5 +18,3 @@ logger.addHandler(handler)
 
 simplefilter("ignore", RankWarning)
 simplefilter("ignore", RuntimeWarning)
-
-

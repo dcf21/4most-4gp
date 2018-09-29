@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 """
@@ -13,7 +12,7 @@ import logging
 
 from fourgp_speclib import Spectrum
 
-import config_files
+from . import config_files
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +107,7 @@ class FourFS:
 
         self.distinct_snr_definitions = set([i for i in (list(self.lrs_use_snr_definitions) +
                                                          list(self.hrs_use_snr_definitions))
-                                             if isinstance(i, basestring) and len(i) > 0])
+                                             if isinstance(i, str) and len(i) > 0])
 
         # Create temporary directory
         self.id_string = "4fs_{:d}".format(os.getpid())
@@ -336,7 +335,7 @@ class FourFS:
         template_number_last = self.template_counter - 1
 
         return {'template_file': writestr,
-                'template_numbers': range(template_number_first, template_number_last + 1)
+                'template_numbers': list(range(template_number_first, template_number_last + 1))
                 }
 
     def combine_spectra(self,

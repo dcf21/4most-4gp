@@ -1,4 +1,3 @@
-#!/usr/bin/env python2.7
 # -*- coding: utf-8 -*-
 
 """
@@ -14,7 +13,7 @@ from math import pi, sin, cos, acos
 import logging
 from scipy.optimize import least_squares
 
-from spectrum import Spectrum
+from .spectrum import Spectrum
 
 logger = logging.getLogger(__name__)
 
