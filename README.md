@@ -152,6 +152,9 @@ Follow these steps in a Linux shell to do this:
 ```
 # Check out code from GitHub
 git clone https://github.com/dcf21/4most-4gp.git
+
+# Sometimes this line is necessary, if your locale settings are broken
+export LC_ALL=C
  
 # Set up a python virtual environment
 virtualenv -p python3 virtualenv
