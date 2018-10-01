@@ -102,7 +102,7 @@ The following external packages and libraries are required:
 * **git** - required to check the code out from GitHub
 * **SQLite3** - including the python-sqlite3 binding; you can test for this by typing `import sqlite3` into a python terminal
 * **python-matplotlib** - required to use the 4GP Spectrum Browser and the Cannon; you can test for this by typing `import matplotlib` into a python terminal
-* **python-tk** - required to use the 4GP Spectrum Browser and the Cannon; you can test for this by typing `import tkinter` into a python terminal
+* **python3-tk** - required to use the 4GP Spectrum Browser and the Cannon; you can test for this by typing `import tkinter` into a python terminal
 * **pyxplot** - required to produce plots of the Cannon's performance
 
 The following packages are strongly recommended:
@@ -126,13 +126,13 @@ as follows:
 Ubuntu 16.04:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python-healpy gfortran python-tk python-matplotlib sqlite3 python3-dev pyxplot
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libhealpix-cxx-dev libchealpix-dev libcfitsio3-dev python3-healpy gfortran python3-tk python3-matplotlib sqlite3 python3-dev pyxplot
 ```
 
 Ubuntu 14.04:
 
 ```
-apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python-tk python-matplotlib sqlite3 python3-dev pyxplot
+apt-get install git python-sqlite mysql-server libmysqlclient-dev python-virtualenv libcfitsio3-dev libblas-dev liblapack-dev libblas3gf liblapack3gf gfortran python3-tk python3-matplotlib sqlite3 python3-dev pyxplot
 apt-get build-dep python-matplotlib
 ```
 

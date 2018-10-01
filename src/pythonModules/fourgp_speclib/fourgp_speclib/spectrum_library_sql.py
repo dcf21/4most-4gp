@@ -207,7 +207,7 @@ CREATE INDEX search_metadata_strings ON spectrum_metadata (libraryId, fieldId, v
             library_type = type(self).__name__
 
             # Create a random unique id for this library
-            unique_id = hashlib.md5(os.urandom(32).encode("hex")).hexdigest()
+            unique_id = hashlib.md5(os.urandom(32)).hexdigest()
             self._library_id = self._fetch_library_id(unique_id, True)
 
             # Document the file format used to store spectra
@@ -763,8 +763,8 @@ REPLACE INTO spectrum_metadata (libraryId, specId, fieldId, valueString) VALUES
 
             # Add suffix to filename to ensure it is unique, and it is gzipped if requested
             if filename_stub is None:
-                filename_stub = hashlib.md5(os.urandom(32).encode("hex")).hexdigest()[:16]
-            random_key = hashlib.md5(os.urandom(32).encode("hex")).hexdigest()[:8]
+                filename_stub = hashlib.md5(os.urandom(32)).hexdigest()[:16]
+            random_key = hashlib.md5(os.urandom(32)).hexdigest()[:8]
             filename = "{}.{}.spec".format(filename_stub, random_key)
             if self._binary_spectra:
                 filename += ".npy"

@@ -469,7 +469,7 @@ class TurboSpectrum:
         try:
             p = subprocess.Popen([os_path.join(self.interpol_path, 'interpol_modeles')],
                                  stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
-            p.stdin.write(interpol_config)
+            p.stdin.write(bytes(interpol_config, 'utf-8'))
             stdout, stderr = p.communicate()
         except subprocess.CalledProcessError:
             return {
@@ -584,8 +584,8 @@ class TurboSpectrum:
            individual_abundances=individual_abundances.strip()
            )
 
-        # print babsma_config
-        # print bsyn_config
+        # print(babsma_config)
+        # print(bsyn_config)
         return babsma_config, bsyn_config
 
     def synthesise(self):
@@ -628,28 +628,32 @@ class TurboSpectrum:
             os.chdir(turbospec_root)
             pr1 = subprocess.Popen([os_path.join(self.turbospec_path, 'babsma_lu')],
                                    stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
-            pr1.stdin.write(babsma_in)
-            stdout, stderr = pr1.communicate()
+            pr1.stdin.write(bytes(babsma_in, 'utf-8'))
+            stdout_bytes, stderr_bytes = pr1.communicate()
         except subprocess.CalledProcessError:
             output["errors"] = "babsma failed"
             return output
         finally:
             os.chdir(cwd)
-        logger.info("%s %s" % (pr1.returncode, stderr))
+        if stderr_bytes is None:
+            stderr_bytes = b''
+        logger.info("{} {}".format(pr1.returncode, stderr_bytes.decode('utf-8')))
 
         # Run bsyn. This synthesizes the spectrum
         try:
             os.chdir(turbospec_root)
             pr = subprocess.Popen([os_path.join(self.turbospec_path, 'bsyn_lu')],
                                   stdin=subprocess.PIPE, stdout=stdout, stderr=stderr)
-            pr.stdin.write(bsyn_in)
-            stdout, stderr = pr.communicate()
+            pr.stdin.write(bytes(bsyn_in, 'utf-8'))
+            stdout_bytes, stderr_bytes = pr.communicate()
         except subprocess.CalledProcessError:
             output["errors"] = "bsyn failed"
             return output
         finally:
             os.chdir(cwd)
-        logger.info("%s %s" % (pr.returncode, stderr))
+        if stderr_bytes is None:
+            stderr_bytes = b''
+        logger.info("{} {}".format(pr.returncode, stderr_bytes.decode('utf-8')))
 
         # Return output
         output["return_code"] = pr.returncode
