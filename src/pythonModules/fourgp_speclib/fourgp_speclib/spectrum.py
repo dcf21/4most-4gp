@@ -615,7 +615,7 @@ class Spectrum(object):
         return output
 
     @requires_common_raster
-    def __div__(self, other):
+    def __truediv__(self, other):
         """
         Divide the values in this spectrum by the values in another one, and return a new Spectrum object.
         
@@ -666,7 +666,7 @@ class Spectrum(object):
         return self
 
     @requires_common_raster
-    def __idiv__(self, other):
+    def __itruediv__(self, other):
         """
         Divide the values in this spectrum by the values in another.
         

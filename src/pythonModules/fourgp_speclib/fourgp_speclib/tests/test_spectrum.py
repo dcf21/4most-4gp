@@ -155,7 +155,7 @@ class TestSpectrum(unittest.TestCase):
             for j in range(i):
                 sum_2 -= self._spectrum
 
-            # Test __div__ method
+            # Test __truediv__ method
             multiplier.fill(-i)
             b = fourgp_speclib.Spectrum(wavelengths=self._raster,
                                         values=multiplier,
@@ -163,7 +163,7 @@ class TestSpectrum(unittest.TestCase):
             sum_3 = sum_1 / b
             sum_4 = sum_2 / b
 
-            # Test __idiv__ method
+            # Test __itruediv__ method
             sum_1 /= b
             sum_2 /= b
 
