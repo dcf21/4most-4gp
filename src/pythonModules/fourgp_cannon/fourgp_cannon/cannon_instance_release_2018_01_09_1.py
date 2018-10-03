@@ -274,7 +274,7 @@ class CannonInstanceWithRunningMeanNormalisation_2018_01_09(CannonInstance_2018_
 
     def normalise(self, spectrum):
         """
-        This is a hook for doing some kind of normalisation on spectra. Not implemented in this base class.
+        This is a hook for doing some kind of normalisation on spectra.
 
         :param spectrum:
             The spectrum to be normalised.
