@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+"""
+This module implements a lightly cleaned up version of Branimir Sesar's RV code.
+"""
+
 import numpy as np
 from scipy.stats import norm
 from multiprocessing import cpu_count
@@ -7,7 +11,6 @@ import logging
 import itertools
 import emcee
 from emcee.interruptible_pool import InterruptiblePool
-import random
 
 import fourgp_speclib
 import fourgp_degrade
@@ -15,9 +18,9 @@ import fourgp_degrade
 logger = logging.getLogger(__name__)
 
 
-class RvInstance(object):
+class RvInstanceBrani(object):
     """
-    A class which is adapted from Brani's code for forward-modelling the radial velocities of stars.
+    A class which is adapted from Branimir Sesar's code for forward-modelling the radial velocities of stars.
     """
 
     # Define the grid of template spectra supplied by Brani for use by RV code
@@ -204,9 +207,9 @@ class RvInstance(object):
                 return -np.inf
 
         # Pick a template
-        template_spectrum = RvInstance.pick_template_spectrum(template_library=template_library,
-                                                              grid_axes=grid_axes,
-                                                              axis_values={"Teff": t_eff, "Fe/H": fe_h, "log_g": log_g})
+        template_spectrum = RvInstanceBrani.pick_template_spectrum(template_library=template_library,
+                                                                   grid_axes=grid_axes,
+                                                                   axis_values={"Teff": t_eff, "Fe/H": fe_h, "log_g": log_g})
 
         if any(np.isnan(template_spectrum.values)):
             return -np.inf
@@ -286,9 +289,9 @@ class RvInstance(object):
             function_family=fourgp_speclib.SpectrumPolynomial)
 
         # Pick a template continuum normalised spectrum
-        template_continuum_normalised = RvInstance.pick_template_spectrum(template_library=self._template_spectra,
-                                                                          grid_axes=self.grid_axes,
-                                                                          axis_values=stellar_labels)
+        template_continuum_normalised = RvInstanceBrani.pick_template_spectrum(template_library=self._template_spectra,
+                                                                               grid_axes=self.grid_axes,
+                                                                               axis_values=stellar_labels)
         interpolator = fourgp_degrade.SpectrumInterpolator(template_continuum_normalised)
         template_interpolated = interpolator.match_to_other_spectrum(observed_shared)
 
@@ -319,7 +322,7 @@ class RvInstance(object):
         pool = InterruptiblePool(processes=self._threads)
 
         # initialize the sampler
-        sampler = emcee.EnsembleSampler(nwalkers=self.n_walkers, dim=self.n_dim, lnpostfn=RvInstance.log_probability,
+        sampler = emcee.EnsembleSampler(nwalkers=self.n_walkers, dim=self.n_dim, lnpostfn=RvInstanceBrani.log_probability,
                                         # pool=pool,
                                         kwargs={"template_library": self._template_spectra,
                                                 "observed_spectrum": observed_shared,
@@ -361,20 +364,3 @@ class RvInstance(object):
 
         return output
 
-
-def random_radial_velocity():
-    """
-    Pick a random radial velocity in km/s, following the approximate probability distribution expected for 4MOST
-    galactic stars.
-
-    :return:
-        Radial velocity in km/s
-    """
-
-    distribution_selector = random.uniform(a=0, b=100)
-
-    if distribution_selector < 10:
-        # Pick 10% of stars from a uniform distribution from -200 to 200
-        return random.uniform(a=-200, b=200)  # Unit km/s
-    else:
-        return random.gauss(mu=0, sigma=25)

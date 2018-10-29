@@ -5,7 +5,9 @@ import logging
 from numpy import RankWarning
 from warnings import simplefilter
 
-from .rv_instance import RvInstance, random_radial_velocity
+from .rv_random import random_radial_velocity
+from .brani_code import RvInstanceBrani
+from .guess_code import RvInstanceGuess
 
 __version__ = "release-2019-09-01-01"
 
