@@ -19,6 +19,15 @@ from fourgp_speclib import SpectrumLibrarySqlite
 
 
 def command_line_interface():
+    """
+    A simple command-line interface for running a tool to resample a library of template spectra onto fixed
+    logarithmic rasters representing each of the 4MOST arms.
+
+    We use the python argparse module to build the interface, and return the inputs supplied by the user.
+
+    :return:
+        An object containing the arguments supplied by the user.
+    """
     # Read input parameters
     our_path = os_path.split(os_path.abspath(__file__))[0]
     root_path = os_path.join(our_path, "../../../..")
@@ -50,8 +59,45 @@ def command_line_interface():
 
     logger.info("Resampling template spectra")
 
+    return args
+
+
+def logarithmic_raster(lambda_min, lambda_max, lambda_step):
+    """
+    Create a logarithmic raster with a fixed logarithmic stride, based on a starting wavelength, finishing wavelength,
+    and a mean wavelength step.
+
+    :param lambda_min:
+        Smallest wavelength in raster.
+    :param lambda_max:
+        Largest wavelength in raster.
+    :param lambda_step:
+        The approximate pixel size in the raster.
+    :return:
+        A numpy array containing a wavelength raster with fixed logarithmic stride.
+    """
+    return np.exp(np.arange(
+        np.log(lambda_min),
+        np.log(lambda_max),
+        np.log(1 + lambda_step / lambda_min)
+    ))
+
 
 def resample_templates(args, logger):
+    """
+    Resample a spectrum library of templates onto a fixed logarithmic stride, representing each of the 4MOST arms in
+    turn. We use 4FS to down-sample the templates to the resolution of 4MOST observations, and automatically detect
+    the list of arms contained within each 4FS mock observation. We then resample the 4FS output onto a new raster
+    with fixed logarithmic stride.
+
+    :param args:
+        Object containing arguments supplied by the used, for example the name of the spectrum libraries we use for
+        input and output. The required fields are defined by the user interface above.
+    :param logger:
+        A python logging object.
+    :return:
+        None.
+    """
     # Set path to workspace where we expect to find libraries of spectra
     workspace = args.workspace if args.workspace else os_path.join(args.our_path, "../../../workspace")
 
@@ -83,17 +129,17 @@ def resample_templates(args, logger):
         input_spectrum_array = templates_library.open(ids=input_spectrum_id['specId'])
 
         # Load template spectrum (flux normalised)
-        test_spectrum = input_spectrum_array.extract_item(0)
+        template_flux_normalised = input_spectrum_array.extract_item(0)
 
         # Look up the unique ID of the star we've just loaded
         # Newer spectrum libraries have a uid field which is guaranteed unique; for older spectrum libraries use
         # Starname instead.
 
         # Work out which field we're using (uid or Starname)
-        spectrum_matching_field = 'uid' if 'uid' in test_spectrum.metadata else 'Starname'
+        spectrum_matching_field = 'uid' if 'uid' in template_flux_normalised.metadata else 'Starname'
 
         # Look up the unique ID of this object
-        object_name = test_spectrum.metadata[spectrum_matching_field]
+        object_name = template_flux_normalised.metadata[spectrum_matching_field]
 
         # Search for the continuum-normalised version of this same object (which will share the same uid / name)
         search_criteria = {
@@ -107,74 +153,74 @@ def resample_templates(args, logger):
         assert len(continuum_normalised_spectrum_id) == 1, "Could not find continuum-normalised spectrum."
 
         # Load the continuum-normalised version
-        test_spectrum_continuum_normalised_arr = templates_library.open(
+        template_continuum_normalised_arr = templates_library.open(
             ids=continuum_normalised_spectrum_id[0]['specId']
         )
 
         # Turn the SpectrumArray we got back into a single Spectrum
-        test_spectrum_continuum_normalised = test_spectrum_continuum_normalised_arr.extract_item(0)
+        template_continuum_normalised = template_continuum_normalised_arr.extract_item(0)
 
         # Now create a mock observation of this template using 4FS
-        logger.info("Passing spectrum through 4FS")
-        mock_observed_spectra = etc_wrapper.process_spectra(
-            spectra_list=((test_spectrum, test_spectrum_continuum_normalised),)
+        logger.info("Passing template through 4FS")
+        mock_observed_template = etc_wrapper.process_spectra(
+            spectra_list=((template_flux_normalised, template_continuum_normalised),)
         )
 
         # Loop over LRS and HRS
-        for mode in mock_observed_spectra:
+        for mode in mock_observed_template:
 
             # Loop over the spectra we simulated (there was only one!)
-            for index in mock_observed_spectra[mode]:
+            for index in mock_observed_template[mode]:
 
                 # Loop over the various SNRs we simulated (there was only one!)
-                for snr in mock_observed_spectra[mode][index]:
+                for snr in mock_observed_template[mode][index]:
 
-                    # Extract continuum-normalised mock observation
-                    logger.info("Resampling {} spectrum".format(mode))
-                    observed = mock_observed_spectra[mode][index][snr]['spectrum_continuum_normalised']
+                    # Create a unique ID for this arm's data
+                    unique_id = hashlib.md5(os.urandom(32)).hexdigest()[:16]
 
-                    # Replace errors which are nans with a large value, otherwise they cause numerical failures later
-                    observed.value_errors[np.isnan(observed.value_errors)] = 1000.
+                    # Import the flux- and continuum-normalised spectra separately, but give them the same ID
+                    for spectrum_type in mock_observed_template[mode][index][snr]:
 
-                    # Resample it onto a logarithmic raster of fixed step
-                    resampler = SpectrumResampler(observed)
+                        # Extract continuum-normalised mock observation
+                        logger.info("Resampling {} spectrum".format(mode))
+                        mock_observed = mock_observed_template[mode][index][snr][spectrum_type]
 
-                    # Construct the raster for each wavelength arm
-                    wavelength_arms = SpectrumProperties(observed.wavelengths).wavelength_arms()
-                    all_wavelength_arms = {}
+                        # Replace errors which are nans with a large value
+                        mock_observed.value_errors[np.isnan(mock_observed.value_errors)] = 1000.
 
-                    # Resample 4FS output for each arm onto a fixed logarithmic stride
-                    for arm_count, arm in enumerate(wavelength_arms["wavelength_arms"]):
-                        arm_raster, mean_pixel_width = arm
-                        name = "{}_{}".format(mode, arm_count)
-                        all_wavelength_arms[name] = {
-                            "lambda_min": arm_raster[0],
-                            "lambda_max": arm_raster[-1],
-                            "lambda_step": mean_pixel_width
-                        }
+                        # Resample template onto a logarithmic raster of fixed step
+                        resampler = SpectrumResampler(mock_observed)
 
-                        arm_raster = np.exp(np.arange(
-                            np.log(all_wavelength_arms[name]['lambda_min']),
-                            np.log(all_wavelength_arms[name]['lambda_max']),
-                            np.log(1 +
-                                   all_wavelength_arms[name]['lambda_step'] / all_wavelength_arms[name]['lambda_min'])
-                        ))
+                        # Construct the raster for each wavelength arm
+                        wavelength_arms = SpectrumProperties(mock_observed.wavelengths).wavelength_arms()
 
-                        # Resample 4FS output onto a fixed logarithmic step
-                        observed_arm = resampler.onto_raster(arm_raster)
+                        # Resample 4FS output for each arm onto a fixed logarithmic stride
+                        for arm_count, arm in enumerate(wavelength_arms["wavelength_arms"]):
+                            arm_raster, mean_pixel_width = arm
+                            name = "{}_{}".format(mode, arm_count)
 
-                        # Create a unique ID for this arm's data
-                        unique_id = hashlib.md5(os.urandom(32)).hexdigest()[:16]
+                            arm_info = {
+                                "lambda_min": arm_raster[0],
+                                "lambda_max": arm_raster[-1],
+                                "lambda_step": mean_pixel_width
+                            }
 
-                        # Import the flux- and continuum-normalised spectra separately, but give them the same ID
-                        for spectrum_type in mock_observed_spectra[mode][index][snr]:
-                            output_library.insert(spectra=mock_observed_spectra[mode][index][snr][spectrum_type],
+                            arm_raster = logarithmic_raster(lambda_min=arm_info['lambda_min'],
+                                                            lambda_max=arm_info['lambda_max'],
+                                                            lambda_step=arm_info['lambda_step']
+                                                            )
+
+                            # Resample 4FS output onto a fixed logarithmic step
+                            mock_observed_arm = resampler.onto_raster(arm_raster)
+
+                            # Save it into output spectrum library
+                            output_library.insert(spectra=mock_observed_arm,
                                                   filenames=input_spectrum_id['filename'],
                                                   metadata_list={
                                                       "uid": unique_id,
                                                       "template_id": object_name,
                                                       "mode": mode,
-                                                      "arm_number": arm_count,
+                                                      "arm_name": "{}_{}".format(mode,arm_count),
                                                       "lambda_min": arm_raster[0],
                                                       "lambda_max": arm_raster[-1],
                                                       "lambda_step": mean_pixel_width

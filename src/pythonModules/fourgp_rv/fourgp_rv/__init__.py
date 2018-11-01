@@ -7,7 +7,7 @@ from warnings import simplefilter
 
 from .rv_random import random_radial_velocity
 from .brani_code import RvInstanceBrani
-from .guess_code import RvInstanceGuess
+from .cross_correlation import RvInstanceCrossCorrelation
 
 __version__ = "release-2019-09-01-01"
 

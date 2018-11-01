@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
 
 """
-This module implements a heavily cleaned up version of Jane Lin's GUESS code, as used by GALAH.
+This module implements a simple cross-correlation code for determining RVs.
 
-Original code taken from <https://github.com/jlin0504/GUESS>.
+It is a heavily cleaned up version of Jane Lin's GUESS code, as used by GALAH. Original code taken from
+<https://github.com/jlin0504/GUESS>.
 """
 
 import scipy.signal as sig
 import numpy as np
 from scipy.optimize import leastsq
-import glob
 import logging
-import csv
 from scipy.interpolate import UnivariateSpline
 from numpy.linalg import lstsq
-import pickle
 import os
 from os import path as os_path
 from scipy.stats import sigmaclip
@@ -22,16 +20,19 @@ from scipy.stats import sigmaclip
 import fourgp_speclib
 import fourgp_degrade
 
+from .templates_resample import logarithmic_raster
+
 logger = logging.getLogger(__name__)
 
-class RvInstanceGuess(object):
+
+class RvInstanceCrossCorrelation(object):
     """
     A class which is adapted from Jane Lin's GUESS code, as used by GALAH.
     """
 
     def __init__(self, spectrum_library):
         """
-        Instantiate the RV code, and read from disk the library of template spectra.
+        Instantiate the RV code, and read from disk the library of template spectra used for cross correlation.
 
         :param spectrum_library:
             A SpectrumLibrary containing the template spectra we use for modelling.
@@ -41,42 +42,39 @@ class RvInstanceGuess(object):
         """
 
         assert isinstance(spectrum_library, fourgp_speclib.SpectrumLibrary), \
-            "Argument to RvInstance should be a SpectrumLibrary."
+            "Argument to RvInstanceCrossCorrelation should be a SpectrumLibrary."
         self._spectrum_library = spectrum_library
 
         # Load template spectra
-        spectrum_list = self._spectrum_library.search()
+        spectrum_list = self._spectrum_library.search(continuum_normalised=1)
 
         # Load library of template spectra
         self._template_spectra = self._spectrum_library.open(ids=[i["specId"] for i in spectrum_list],
                                                              shared_memory=True)
 
-        # Identifying 4MOST wavelength arms
-        spectrograph_arms = ('blu', 'grn', 'red')
-        all_wavelength_arms = {}
+        # Make a list of templates by 4MOST wavelength arm
+        templates_by_arm = {}
+        arm_rasters = {}
 
-        wavelength_arms = fourgp_degrade.SpectrumProperties(
-            wavelength_raster=self._template_spectra.wavelengths
-        ).wavelength_arms()
+        # Loop over all the templates we've just loaded, sorting them by arm
+        for i in range(len(self._template_spectra)):
+            template_metadata = self._template_spectra.get_metadata(i)
+            mode = template_metadata['mode']
+            arm_name = template_metadata['arm_name']
 
-        for arm_name, arm in zip(spectrograph_arms, wavelength_arms["wavelength_arms"]):
-            arm_raster, mean_pixel_width = arm
-            all_wavelength_arms[arm_name] = {
-                "lambda_min": arm_raster[0],
-                "lambda_max": arm_raster[-1],
-                "lambda_step": mean_pixel_width
-            }
+            if mode not in templates_by_arm:
+                templates_by_arm[mode] = {}
+            if arm_name not in templates_by_arm[mode]:
+                templates_by_arm[mode][arm_name] = []
 
-        # Print information about the wavelength arms we have identified
-        logger.info("Identified 4MOST wavelength arms as follows:")
-        for arm_name in sorted(all_wavelength_arms.keys()):
-            arm = all_wavelength_arms[arm_name]
-            logger.info("{0:10s}: min {1:10.1f} max {2:10.1f} step {3:10.5f}".format(arm_name,
-                                                                                     arm["lambda_min"],
-                                                                                     arm["lambda_max"],
-                                                                                     arm["lambda_step"]))
+            # Add this template to the list of available templates for this wavelength arm
+            templates_by_arm[mode][arm_name].append(i)
 
-        self.wavelength_arms = all_wavelength_arms
+            # If we haven't already recreated the fixed-log-step wavelength raster for this arm, do it now
+            if arm_name not in arm_rasters:
+                arm_rasters[arm_name] = logarithmic_raster(lambda_min=template_metadata['lambda_min'],
+                                                           lambda_max=template_metadata['lambda_max'],
+                                                           lambda_step=template_metadata['lambda_step'])
 
     def median_filter_flux(self, filename):
 
