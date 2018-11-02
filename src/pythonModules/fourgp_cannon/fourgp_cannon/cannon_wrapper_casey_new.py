@@ -1,10 +1,22 @@
 # -*- coding: utf-8 -*-
 
+"""
+This provides a wrapper to the 2018 version of Andy Casey's Cannon.
+
+The code for this Cannon is in the dev-dcf branch of this repository: https://github.com/dcf21/AnniesLasso
+
+In January 2018 we got poor results with this version of the Cannon, so did not widely adopt it for 4MOST tests
+at that time.
+"""
+
+import os
+import sys
+from contextlib import contextmanager
 import numpy as np
 from multiprocessing import cpu_count
 import logging
 from astropy.table import Table
-import AnniesLasso as tc
+import thecannon as tc
 
 import fourgp_speclib
 from fourgp_degrade import SpectrumResampler
@@ -12,7 +24,29 @@ from fourgp_degrade import SpectrumResampler
 logger = logging.getLogger(__name__)
 
 
-class CannonInstance_2018_01_09(object):
+@contextmanager
+def suppress_stdout(allow_progressbar):
+    """
+    The Cannon has a really annoying habit to draw progress bars, even if you're piping output to a file. And there's no
+    switch to turn it off. The result is gigabytes of crap in your log files. Thanks, guys. This is a helper class to
+    temporarily send stdout to </dev/null> while Dr Casey floods it.
+
+    :param allow_progressbar:
+        Boolean which lets you select whether you want gigabytes of crap or not.
+    :return:
+        None
+    """
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        if not allow_progressbar:
+            sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+
+
+class CannonInstanceCaseyNew(object):
     """
     A class which holds an instance of the Cannon, and provides convenience methods for training it on arrays of spectra
     loaded from 4GP SpectrumLibrary objects.
@@ -23,7 +57,7 @@ class CannonInstance_2018_01_09(object):
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
-
+        
         :param training_set:
             A SpectrumArray containing the spectra to train the Cannon on.
 
@@ -95,48 +129,40 @@ class CannonInstance_2018_01_09(object):
                                       rows=[[training_set.get_metadata(index)[label] for label in label_names]
                                             for index in range(len(training_set))])
 
-        self._model = tc.L1RegularizedCannonModel(labelled_set=training_label_values,
-                                                  normalized_flux=training_set.values,
-                                                  normalized_ivar=inverse_variances,
-                                                  dispersion=training_set.wavelengths,
-                                                  threads=threads)
-
-        self._model.vectorizer = tc.vectorizer.NormalizedPolynomialVectorizer(
-            labelled_set=training_label_values,
-            terms=tc.vectorizer.polynomial.terminator(label_names, 2)
-        )
-
-        if censors is not None:
-            self._model.censors = censors
-
-        self._model.s2 = 0
-        self._model.regularization = 0
+        self._model = tc.CannonModel(training_set_labels=training_label_values,
+                                     training_set_flux=training_set.values,
+                                     training_set_ivar=inverse_variances,
+                                     dispersion=training_set.wavelengths,
+                                     vectorizer=tc.vectorizer.PolynomialVectorizer(
+                                         label_names=label_names,
+                                         order=2
+                                     ),
+                                     censors=censors)
 
         if load_from_file is None:
             logger.info("Starting to train the Cannon")
-            self._model.train(
-                progressbar=self._progress_bar,
-                op_kwargs={'xtol': tolerance, 'ftol': tolerance},
-                op_bfgs_kwargs={}
-            )
+            with suppress_stdout(self._progress_bar):
+                self._model.train(op_kwds={'xtol': tolerance, 'ftol': tolerance},
+                                  op_bfgs_kwargs={},
+                                  threads=threads
+                                  )
             logger.info("Cannon training completed")
         else:
             logger.info("Loading Cannon from disk")
-            self._model.load(filename=load_from_file)
+            self._model = self._model.read(path=load_from_file)
             logger.info("Cannon loaded successfully")
-        self._model._set_s2_by_hogg_heuristic()
 
     def fit_spectrum(self, spectrum):
         """
         Fit stellar labels to a continuum-normalised spectrum.
-
+        
         :param spectrum:
             A Spectrum object containing the spectrum for the Cannon to fit.
-
+            
         :type spectrum:
             Spectrum
-
-        :return:
+            
+        :return: 
         """
 
         assert isinstance(spectrum, fourgp_speclib.Spectrum), \
@@ -155,11 +181,10 @@ class CannonInstance_2018_01_09(object):
         inverse_variances[bad] = 0
         spectrum.values[bad] = np.nan
 
-        labels, cov, meta = self._model.fit(
-            normalized_flux=spectrum.values,
-            normalized_ivar=inverse_variances,
-            progressbar=False,
-            full_output=True)
+        with suppress_stdout(self._progress_bar):
+            labels, cov, meta = self._model.test(
+                flux=spectrum.values,
+                ivar=inverse_variances)
 
         return labels, cov, meta
 
@@ -178,25 +203,25 @@ class CannonInstance_2018_01_09(object):
     def save_model(self, filename, overwrite=True):
         """
         Save the parameters of a trained Cannon instance.
-
+        
         :param filename:
             Output file in which to save trained Cannon parameters.
-
+         
         :type filename:
             str
-
+            
         :param overwrite:
             Do we overwrite any existing files?
-
+        
         :type overwrite:
             bool
-
+            
         :return:
             None
         """
-        self._model.save(filename=filename,
-                         include_training_data=False,
-                         overwrite=overwrite)
+        self._model.write(path=filename,
+                          include_training_set_spectra=False,
+                          overwrite=overwrite)
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,
@@ -207,7 +232,7 @@ class CannonInstance_2018_01_09(object):
                                                 type(self).__name__, hex(id(self)))
 
 
-class CannonInstanceWithRunningMeanNormalisation_2018_01_09(CannonInstance_2018_01_09):
+class CannonInstanceCaseyNewWithRunningMeanNormalisation(CannonInstanceCaseyNew):
     """
     A class which holds an instance of the Cannon, and automatically normalises the test spectra using a running mean
     with a width of the certain number of pixels. This allows the Cannon to operate on spectra which have not been
@@ -261,20 +286,20 @@ class CannonInstanceWithRunningMeanNormalisation_2018_01_09(CannonInstance_2018_
         self._window_width = normalisation_window
 
         # Initialise
-        super(CannonInstanceWithRunningMeanNormalisation_2018_01_09, self).__init__(training_set=training_set,
-                                                                                    label_names=label_names,
-                                                                                    wavelength_arms=wavelength_arms,
-                                                                                    censors=censors,
-                                                                                    progress_bar=progress_bar,
-                                                                                    threads=threads,
-                                                                                    tolerance=tolerance,
-                                                                                    load_from_file=load_from_file,
-                                                                                    debugging=debugging
-                                                                                    )
+        super(CannonInstanceCaseyNewWithRunningMeanNormalisation, self).__init__(training_set=training_set,
+                                                                                 label_names=label_names,
+                                                                                 wavelength_arms=wavelength_arms,
+                                                                                 censors=censors,
+                                                                                 progress_bar=progress_bar,
+                                                                                 threads=threads,
+                                                                                 tolerance=tolerance,
+                                                                                 load_from_file=load_from_file,
+                                                                                 debugging=debugging
+                                                                                 )
 
     def normalise(self, spectrum):
         """
-        This is a hook for doing some kind of normalisation on spectra.
+        This is a hook for doing some kind of normalisation on spectra. Not implemented in this base class.
 
         :param spectrum:
             The spectrum to be normalised.
@@ -346,7 +371,7 @@ class CannonInstanceWithRunningMeanNormalisation_2018_01_09(CannonInstance_2018_
         return output
 
 
-class CannonInstanceWithContinuumNormalisation_2018_01_09(CannonInstance_2018_01_09):
+class CannonInstanceCaseyNewWithContinuumNormalisation(CannonInstanceCaseyNew):
     """
     A class which holds an instance of the Cannon, and automatically continuum normalises the test spectra in
     an iterative fashion, using pixels which are known to have continuum normalised values close to one.
@@ -406,16 +431,16 @@ class CannonInstanceWithContinuumNormalisation_2018_01_09(CannonInstance_2018_01
         self._continuum_model_family = continuum_model_family
 
         # Initialise
-        super(CannonInstanceWithContinuumNormalisation_2018_01_09, self).__init__(training_set=training_set,
-                                                                                  label_names=label_names,
-                                                                                  wavelength_arms=wavelength_arms,
-                                                                                  censors=censors,
-                                                                                  progress_bar=progress_bar,
-                                                                                  threads=threads,
-                                                                                  tolerance=tolerance,
-                                                                                  load_from_file=load_from_file,
-                                                                                  debugging=debugging
-                                                                                  )
+        super(CannonInstanceCaseyNewWithContinuumNormalisation, self).__init__(training_set=training_set,
+                                                                               label_names=label_names,
+                                                                               wavelength_arms=wavelength_arms,
+                                                                               censors=censors,
+                                                                               progress_bar=progress_bar,
+                                                                               threads=threads,
+                                                                               tolerance=tolerance,
+                                                                               load_from_file=load_from_file,
+                                                                               debugging=debugging
+                                                                               )
 
     def fit_spectrum(self, spectrum):
         """
