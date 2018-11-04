@@ -11,7 +11,8 @@ This is a version of the Cannon that Dominic Ford began investigating in Novembe
 import numpy as np
 import logging
 import pickle
-import TheCannon as tc
+import TheCannon.dataset as ho_dataset
+import TheCannon.model as ho_model
 
 import fourgp_speclib
 
@@ -61,6 +62,7 @@ class CannonInstanceAnnaHo(object):
         self._debugging_output_counter = 0
         self._debugging = debugging
         self.cannon_version = "AnnaHo"
+        self._label_names = label_names
         self._wavelength_arms = wavelength_arms
         logger.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
 
@@ -92,18 +94,19 @@ class CannonInstanceAnnaHo(object):
                     label, index, metadata)
 
         # Compile table of training values of labels from metadata contained in SpectrumArray
-        dataset = tc.dataset.Dataset(wl=training_set.wavelengths,
+        dataset = ho_dataset.Dataset(wl=training_set.wavelengths,
                                      tr_ID=range(len(training_set)),
                                      tr_flux=training_set.values,
                                      tr_ivar=inverse_variances,
-                                     tr_label=[[training_set.get_metadata(index)[label] for label in label_names]
-                                               for index in range(len(training_set))],
-                                     test_ID=None,
-                                     test_flux=None,
-                                     test_ivar=None
+                                     tr_label=np.array([np.array([training_set.get_metadata(index)[label] for label in label_names])
+                                               for index in range(len(training_set))]),
+                                     test_ID=[],
+                                     test_flux=[],
+                                     test_ivar=[]
                                      )
 
-        self._model = tc.model.CannonModel(order=2, useErrors=False)
+        dataset.set_label_names(names=label_names)
+        self._model = ho_model.CannonModel(order=2, useErrors=False)
 
         if load_from_file is None:
             logger.info("Starting to train the Cannon")
@@ -144,16 +147,17 @@ class CannonInstanceAnnaHo(object):
         spectrum.values[bad] = np.nan
 
         # Compile table of training values of labels from metadata contained in SpectrumArray
-        dataset = tc.dataset.Dataset(wl=spectrum.wavelengths,
-                                     tr_ID=None,
-                                     tr_flux=None,
-                                     tr_ivar=None,
-                                     tr_label=None,
-                                     test_ID=(0,),
-                                     test_flux=(spectrum.values,),
-                                     test_ivar=(inverse_variances,)
+        dataset = ho_dataset.Dataset(wl=spectrum.wavelengths,
+                                     tr_ID=[],
+                                     tr_flux=[],
+                                     tr_ivar=[],
+                                     tr_label=[],
+                                     test_ID=np.array((0,)),
+                                     test_flux=np.array((spectrum.values,)),
+                                     test_ivar=np.array((inverse_variances,))
                                      )
 
+        dataset.set_label_names(names=self._label_names)
         errs_all, chisq_all = self._model.infer_labels(ds=dataset)
 
         labels = dataset.test_label_vals
@@ -193,9 +197,10 @@ class CannonInstanceAnnaHo(object):
         :return:
             None
         """
+        return
         pickle.dump(
             obj=self._model,
-            file=open(filename, "rb")
+            file=open(filename, "wb")
         )
 
     def __str__(self):
