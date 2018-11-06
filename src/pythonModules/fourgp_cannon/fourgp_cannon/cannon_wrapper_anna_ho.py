@@ -26,7 +26,7 @@ class CannonInstanceAnnaHo(object):
     """
 
     def __init__(self, training_set, label_names, wavelength_arms=None,
-                 censors=None, progress_bar=False, threads=None, tolerance=None,
+                 censors=None, progress_bar=False, threads=None, tolerance=None, polynomial_order=2,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
@@ -48,6 +48,9 @@ class CannonInstanceAnnaHo(object):
         :param tolerance:
             The tolerance xtol which the method <scipy.optimize.fmin_powell> uses to determine convergence.
 
+        :param polynomial_order:
+            The order of polynomials to use as fitting functions within the Cannon.
+
         :param load_from_file:
             The filename of the internal state of a pre-trained Cannon, which we should load rather than doing
             training from scratch.
@@ -58,6 +61,12 @@ class CannonInstanceAnnaHo(object):
         :type debugging:
             bool
         """
+
+        assert polynomial_order == 2, "Anna Ho's Cannon only supports quadratic polynomials. " \
+                                      "You requested <polynomial_order={}>.".format(polynomial_order)
+
+        assert censors == None, "Anna Ho's Cannon does not support censoring. " \
+                                "But you requested that it should be enabled."
 
         self._debugging_output_counter = 0
         self._debugging = debugging
@@ -98,7 +107,8 @@ class CannonInstanceAnnaHo(object):
                                      tr_ID=range(len(training_set)),
                                      tr_flux=training_set.values,
                                      tr_ivar=inverse_variances,
-                                     tr_label=np.array([np.array([training_set.get_metadata(index)[label] for label in label_names])
+                                     tr_label=np.array([np.array([training_set.get_metadata(index)[label]
+                                                                  for label in label_names])
                                                for index in range(len(training_set))]),
                                      test_ID=[],
                                      test_flux=[],

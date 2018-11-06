@@ -53,7 +53,7 @@ class CannonInstanceCaseyNew(object):
     """
 
     def __init__(self, training_set, label_names, wavelength_arms=None,
-                 censors=None, progress_bar=False, threads=None, tolerance=None,
+                 censors=None, progress_bar=False, threads=None, tolerance=None, polynomial_order=2,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
@@ -74,6 +74,9 @@ class CannonInstanceCaseyNew(object):
 
         :param tolerance:
             The tolerance xtol which the method <scipy.optimize.fmin_powell> uses to determine convergence.
+
+        :param polynomial_order:
+            The order of polynomials to use as fitting functions within the Cannon.
 
         :param load_from_file:
             The filename of the internal state of a pre-trained Cannon, which we should load rather than doing
@@ -242,7 +245,7 @@ class CannonInstanceCaseyNewWithRunningMeanNormalisation(CannonInstanceCaseyNew)
     """
 
     def __init__(self, training_set, label_names, wavelength_arms, normalisation_window=300,
-                 censors=None, progress_bar=False, threads=None, tolerance=1e-4,
+                 censors=None, progress_bar=False, threads=None, tolerance=1e-4, polynomial_order=2,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
@@ -272,6 +275,9 @@ class CannonInstanceCaseyNewWithRunningMeanNormalisation(CannonInstanceCaseyNew)
         :param tolerance:
             The tolerance xtol which the method <scipy.optimize.fmin_powell> uses to determine convergence.
 
+        :param polynomial_order:
+            The order of polynomials to use as fitting functions within the Cannon.
+
         :param load_from_file:
             The filename of the internal state of a pre-trained Cannon, which we should load rather than doing
             training from scratch.
@@ -293,6 +299,7 @@ class CannonInstanceCaseyNewWithRunningMeanNormalisation(CannonInstanceCaseyNew)
                                                                                  progress_bar=progress_bar,
                                                                                  threads=threads,
                                                                                  tolerance=tolerance,
+                                                                                 polynomial_order=polynomial_order,
                                                                                  load_from_file=load_from_file,
                                                                                  debugging=debugging
                                                                                  )
@@ -384,7 +391,7 @@ class CannonInstanceCaseyNewWithContinuumNormalisation(CannonInstanceCaseyNew):
 
     def __init__(self, training_set, label_names, wavelength_arms,
                  continuum_model_family=fourgp_speclib.SpectrumPolynomial,
-                 censors=None, progress_bar=False, threads=None, tolerance=1e-4,
+                 censors=None, progress_bar=False, threads=None, tolerance=1e-4, polynomial_order=2,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
@@ -414,6 +421,9 @@ class CannonInstanceCaseyNewWithContinuumNormalisation(CannonInstanceCaseyNew):
         :param tolerance:
             The tolerance xtol which the method <scipy.optimize.fmin_powell> uses to determine convergence.
 
+        :param polynomial_order:
+            The order of polynomials to use as fitting functions within the Cannon.
+
         :param load_from_file:
             The filename of the internal state of a pre-trained Cannon, which we should load rather than doing
             training from scratch.
@@ -438,6 +448,7 @@ class CannonInstanceCaseyNewWithContinuumNormalisation(CannonInstanceCaseyNew):
                                                                                progress_bar=progress_bar,
                                                                                threads=threads,
                                                                                tolerance=tolerance,
+                                                                               polynomial_order=polynomial_order,
                                                                                load_from_file=load_from_file,
                                                                                debugging=debugging
                                                                                )
@@ -530,11 +541,12 @@ class CannonInstanceCaseyNewWithContinuumNormalisation(CannonInstanceCaseyNew):
             cn_spectrum = spectrum / continuum_model
 
             # Run the Cannon
-            labels, cov, meta = super(CannonInstanceWithContinuumNormalisation, self).fit_spectrum(spectrum=cn_spectrum)
+            labels, cov, meta = super(CannonInstanceCaseyNewWithContinuumNormalisation, self).\
+                fit_spectrum(spectrum=cn_spectrum)
 
             # Fetch the Cannon's model spectrum
             model = fourgp_speclib.Spectrum(wavelengths=raster,
-                                            values=self._model(labels=labels),
+                                            values=self._model.predict(labels=labels),
                                             value_errors=np.zeros_like(raster))
 
             # Make new model of which pixels are continuum (based on Cannon's template being close to one)

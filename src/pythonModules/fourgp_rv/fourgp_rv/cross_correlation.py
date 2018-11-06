@@ -7,18 +7,16 @@ It is a heavily cleaned up version of Jane Lin's GUESS code, as used by GALAH. O
 <https://github.com/jlin0504/GUESS>.
 """
 
+from math import sqrt
+
 import scipy.signal as sig
 import numpy as np
 from scipy.optimize import leastsq
 import logging
 from scipy.interpolate import UnivariateSpline
-from numpy.linalg import lstsq
-import os
-from os import path as os_path
-from scipy.stats import sigmaclip
 
 import fourgp_speclib
-import fourgp_degrade
+from fourgp_degrade.resample import SpectrumResampler
 
 from .templates_resample import logarithmic_raster
 
@@ -53,8 +51,8 @@ class RvInstanceCrossCorrelation(object):
                                                              shared_memory=True)
 
         # Make a list of templates by 4MOST wavelength arm
-        templates_by_arm = {}
-        arm_rasters = {}
+        self.templates_by_arm = {}
+        self.arm_rasters = {}
 
         # Loop over all the templates we've just loaded, sorting them by arm
         for i in range(len(self._template_spectra)):
@@ -62,19 +60,93 @@ class RvInstanceCrossCorrelation(object):
             mode = template_metadata['mode']
             arm_name = template_metadata['arm_name']
 
-            if mode not in templates_by_arm:
-                templates_by_arm[mode] = {}
-            if arm_name not in templates_by_arm[mode]:
-                templates_by_arm[mode][arm_name] = []
+            if mode not in self.templates_by_arm:
+                self.templates_by_arm[mode] = {}
+            if arm_name not in self.templates_by_arm[mode]:
+                self.templates_by_arm[mode][arm_name] = []
 
             # Add this template to the list of available templates for this wavelength arm
-            templates_by_arm[mode][arm_name].append(i)
+            self.templates_by_arm[mode][arm_name].append(i)
 
             # If we haven't already recreated the fixed-log-step wavelength raster for this arm, do it now
-            if arm_name not in arm_rasters:
-                arm_rasters[arm_name] = logarithmic_raster(lambda_min=template_metadata['lambda_min'],
+            if arm_name not in self.arm_rasters:
+                self.arm_rasters[arm_name] = logarithmic_raster(lambda_min=template_metadata['lambda_min'],
                                                            lambda_max=template_metadata['lambda_max'],
                                                            lambda_step=template_metadata['lambda_step'])
+
+    def resample_single_arm(self, input_spectrum, arm_name):
+        """
+        Resample an input spectrum onto a raster with fixed logarithmic stride, representing a single 4MOST arm. We
+        use the same wavelength rasters that the template spectra were sampled onto.
+
+        :param input_spectrum:
+            A Spectrum object, containing an observed spectrum
+        :param arm_name:
+            The name of the arm within this 4MOST mode
+        :return:
+            A Spectrum object containing a single arm of 4MOST data, resampled with a fixed logarithmic stride.
+        """
+
+        new_raster = self.arm_rasters[arm_name]
+
+        resampler = SpectrumResampler(input_spectrum=input_spectrum)
+
+        resampled_spectrum = resampler.onto_raster(output_raster=new_raster, resample_errors=True, resample_mask=False)
+
+        return resampled_spectrum
+
+    def estimate_rv_from_single_arm(self, input_spectrum, mode, arm_name):
+        """
+        Estimate the RV of a spectrum on the basis of data from a single arm. We return a list of RV estimates from
+        cross correlation with each of the template spectra, and the chi-squared mismatch of each template spectrum
+        which should be used to weight the RV estimates.
+
+        :param input_spectrum:
+            A Spectrum object, containing an observed spectrum. This should represent one arm of data only, and should
+            be sampled onto the same fixed logarithmic wavelength stride as the template spectra.
+        :param mode:
+            The name of the 4MOST mode this arm is part of -- either LRS or HRS
+        :param arm_name:
+            The name of the arm within this 4MOST mode
+        :return:
+            List of [RV value, chi-squared weight]
+        """
+
+    def estimate_rv(self, input_spectrum, mode):
+        """
+        Estimate the RV of a spectrum on the basis of all of the 4MOST arms of either HRS or LRS.
+
+        :param input_spectrum:
+            A Spectrum object, containing an observed spectrum
+        :param mode:
+            The name of the 4MOST mode this arm is part of -- either LRS or HRS
+        :return:
+            [RV, error in RV]
+        """
+
+        rv_estimates = []
+
+        arm_names = self.templates_by_arm[mode].keys()
+
+        for arm_name in arm_names:
+            new_rv_estimates = self.estimate_rv_from_single_arm(
+                input_spectrum=self.resample_single_arm(input_spectrum=input_spectrum, arm_name=arm_name),
+                mode=mode,
+                arm_name=arm_name
+            )
+            rv_estimates.extend(new_rv_estimates)
+
+        rv_mean = (sum([rv * weight for rv, weight in rv_estimates]) /
+                   sum([weight for rv, weight in rv_estimates]))
+
+        rv_variance = (sum([pow(rv-rv_mean, 2) * weight for rv, weight in rv_estimates]) /
+                       sum([weight for rv, weight in rv_estimates]))
+
+        rv_std_dev = sqrt(rv_variance)
+
+        return rv_mean, rv_std_dev
+
+    # --------------------------------------
 
     def median_filter_flux(self, filename):
 
