@@ -109,7 +109,7 @@ class CannonInstanceAnnaHo(object):
                                      tr_ivar=inverse_variances,
                                      tr_label=np.array([np.array([training_set.get_metadata(index)[label]
                                                                   for label in label_names])
-                                               for index in range(len(training_set))]),
+                                                        for index in range(len(training_set))]),
                                      test_ID=[],
                                      test_flux=[],
                                      test_ivar=[]

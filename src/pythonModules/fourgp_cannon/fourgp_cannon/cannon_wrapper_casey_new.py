@@ -145,7 +145,11 @@ class CannonInstanceCaseyNew(object):
         if load_from_file is None:
             logger.info("Starting to train the Cannon")
             with suppress_stdout(self._progress_bar):
-                self._model.train(op_kwds={'xtol': tolerance, 'ftol': tolerance},
+                if tolerance is not None:
+                    op_kwds = {'xtol': tolerance, 'ftol': tolerance}
+                else:
+                    op_kwds = {}
+                self._model.train(op_kwds=op_kwds,
                                   op_bfgs_kwargs={},
                                   threads=threads
                                   )
@@ -245,7 +249,7 @@ class CannonInstanceCaseyNewWithRunningMeanNormalisation(CannonInstanceCaseyNew)
     """
 
     def __init__(self, training_set, label_names, wavelength_arms, normalisation_window=300,
-                 censors=None, progress_bar=False, threads=None, tolerance=1e-4, polynomial_order=2,
+                 censors=None, progress_bar=False, threads=None, tolerance=None, polynomial_order=2,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
@@ -391,7 +395,7 @@ class CannonInstanceCaseyNewWithContinuumNormalisation(CannonInstanceCaseyNew):
 
     def __init__(self, training_set, label_names, wavelength_arms,
                  continuum_model_family=fourgp_speclib.SpectrumPolynomial,
-                 censors=None, progress_bar=False, threads=None, tolerance=1e-4, polynomial_order=2,
+                 censors=None, progress_bar=False, threads=None, tolerance=None, polynomial_order=2,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
@@ -541,7 +545,7 @@ class CannonInstanceCaseyNewWithContinuumNormalisation(CannonInstanceCaseyNew):
             cn_spectrum = spectrum / continuum_model
 
             # Run the Cannon
-            labels, cov, meta = super(CannonInstanceCaseyNewWithContinuumNormalisation, self).\
+            labels, cov, meta = super(CannonInstanceCaseyNewWithContinuumNormalisation, self). \
                 fit_spectrum(spectrum=cn_spectrum)
 
             # Fetch the Cannon's model spectrum

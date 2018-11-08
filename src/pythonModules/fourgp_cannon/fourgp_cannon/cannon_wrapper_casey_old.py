@@ -228,7 +228,7 @@ class CannonInstanceCaseyOldWithRunningMeanNormalisation(CannonInstanceCaseyOld)
     """
 
     def __init__(self, training_set, label_names, wavelength_arms, normalisation_window=300,
-                 censors=None, progress_bar=False, threads=None, tolerance=1e-4, polynomial_order=2,
+                 censors=None, progress_bar=False, threads=None, tolerance=None, polynomial_order=2,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
@@ -374,7 +374,7 @@ class CannonInstanceCaseyOldWithContinuumNormalisation(CannonInstanceCaseyOld):
 
     def __init__(self, training_set, label_names, wavelength_arms,
                  continuum_model_family=fourgp_speclib.SpectrumPolynomial,
-                 censors=None, progress_bar=False, threads=None, tolerance=1e-4, polynomial_order=2,
+                 censors=None, progress_bar=False, threads=None, tolerance=None, polynomial_order=2,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Cannon and train it on the spectra contained within a SpectrumArray.
