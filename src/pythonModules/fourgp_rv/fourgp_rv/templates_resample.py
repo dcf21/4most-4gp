@@ -18,30 +18,31 @@ from fourgp_degrade import SpectrumProperties
 from fourgp_speclib import SpectrumLibrarySqlite
 
 
-def command_line_interface():
+def command_line_interface(root_path):
     """
     A simple command-line interface for running a tool to resample a library of template spectra onto fixed
     logarithmic rasters representing each of the 4MOST arms.
 
     We use the python argparse module to build the interface, and return the inputs supplied by the user.
 
+    :param root_path:
+        The root path of this 4GP installation; the directory where we can find 4FS.
+
     :return:
         An object containing the arguments supplied by the user.
     """
     # Read input parameters
-    our_path = os_path.split(os_path.abspath(__file__))[0]
-    root_path = os_path.join(our_path, "../../../..")
     parser = argparse.ArgumentParser(description=__doc__.strip())
     parser.add_argument('--templates-in',
                         required=False,
-                        default='rv_code_rect_grid',
+                        default='turbospec_rv_templates',
                         dest='templates_in',
                         help="Library of spectra to use as templates for RV code")
     parser.add_argument('--workspace', dest='workspace', default="",
                         help="Directory where we expect to find spectrum libraries")
     parser.add_argument('--templates-out',
                         required=False,
-                        default="rv_code_rect_grid_resampled",
+                        default="resampled_rv_templates",
                         dest="templates_out",
                         help="Library into which to place resampled templates for RV code")
     parser.add_argument('--binary-path',
@@ -50,7 +51,6 @@ def command_line_interface():
                         dest="binary_path",
                         help="Specify a directory where 4FS binary package is installed")
     args = parser.parse_args()
-    args.our_path = our_path
 
     # Set up logger
     logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s:%(filename)s:%(message)s',
@@ -113,7 +113,7 @@ def resample_templates(args, logger):
 
     # Create new SpectrumLibrary to hold the resampled output templates
     library_path = os_path.join(workspace, args.templates_out)
-    output_library = SpectrumLibrarySqlite(path=library_path, create=args.create)
+    output_library = SpectrumLibrarySqlite(path=library_path, create=True)
 
     # Instantiate 4FS wrapper
     etc_wrapper = FourFS(

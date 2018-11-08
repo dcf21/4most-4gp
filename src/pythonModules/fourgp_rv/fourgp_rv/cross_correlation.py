@@ -9,11 +9,9 @@ It is a heavily cleaned up version of Jane Lin's GUESS code, as used by GALAH. O
 
 from math import sqrt
 
-import scipy.signal as sig
 import numpy as np
 from scipy.optimize import leastsq
 import logging
-from scipy.interpolate import UnivariateSpline
 
 import fourgp_speclib
 from fourgp_degrade.resample import SpectrumResampler
@@ -46,17 +44,15 @@ class RvInstanceCrossCorrelation(object):
         # Load template spectra
         spectrum_list = self._spectrum_library.search(continuum_normalised=1)
 
-        # Load library of template spectra
-        self._template_spectra = self._spectrum_library.open(ids=[i["specId"] for i in spectrum_list],
-                                                             shared_memory=True)
-
         # Make a list of templates by 4MOST wavelength arm
         self.templates_by_arm = {}
         self.arm_rasters = {}
+        self.arm_properties = {}
+        self.window_functions = {}
 
-        # Loop over all the templates we've just loaded, sorting them by arm
-        for i in range(len(self._template_spectra)):
-            template_metadata = self._template_spectra.get_metadata(i)
+        # Sort template spectra by the arm they are sampled on
+        for template_id in [i["specId"] for i in spectrum_list]:
+            template_metadata = self._spectrum_library.get_metadata(ids=(template_id,))[0]
             mode = template_metadata['mode']
             arm_name = template_metadata['arm_name']
 
@@ -66,13 +62,70 @@ class RvInstanceCrossCorrelation(object):
                 self.templates_by_arm[mode][arm_name] = []
 
             # Add this template to the list of available templates for this wavelength arm
-            self.templates_by_arm[mode][arm_name].append(i)
+            self.templates_by_arm[mode][arm_name].append(template_id)
 
             # If we haven't already recreated the fixed-log-step wavelength raster for this arm, do it now
             if arm_name not in self.arm_rasters:
                 self.arm_rasters[arm_name] = logarithmic_raster(lambda_min=template_metadata['lambda_min'],
-                                                           lambda_max=template_metadata['lambda_max'],
-                                                           lambda_step=template_metadata['lambda_step'])
+                                                                lambda_max=template_metadata['lambda_max'],
+                                                                lambda_step=template_metadata['lambda_step'])
+
+                self.arm_properties[arm_name] = {
+                    'lambda_min': template_metadata['lambda_min'],
+                    'lambda_max': template_metadata['lambda_max'],
+                    'lambda_step': template_metadata['lambda_step'],
+                    'multiplicative_step': self.arm_rasters[arm_name][1] / self.arm_rasters[arm_name][0]
+                }
+
+                self.window_functions[arm_name] = self.window_function(template_length=len(self.arm_rasters[arm_name]))
+                print("Arm {} requested length {}; got length {}".format(arm_name, len(self.arm_rasters[arm_name]),
+                                                                         self.window_functions[arm_name].shape))
+
+        # Load library of template spectra for each arm
+        self.template_spectra = {}
+
+        for mode in self.templates_by_arm:
+            for arm_name in self.templates_by_arm[mode]:
+                self.template_spectra[arm_name] = self._spectrum_library.open(
+                    ids=self.templates_by_arm[mode][arm_name],
+                    shared_memory=True
+                )
+
+        # Multiply template spectra by window function
+        for arm_name in self.template_spectra:
+            for index in range(len(self.template_spectra[arm_name])):
+                template_spectrum = self.template_spectra[arm_name].extract_item(index=index)
+                print("Shape of template: {}".format(template_spectrum.values.shape))
+                print("Shape of window: {}".format(self.window_functions[arm_name].shape))
+                template_spectrum.values *= self.window_functions[arm_name]
+
+    @staticmethod
+    def window_function(template_length):
+        """
+        Create a window function that we multiply each template by to avoid edge-effects. This goes to zero at either
+        end.
+
+        :param template_length:
+            The number of pixels in the template spectrum we want to create a window function for.
+        :return:
+            np.array
+        """
+
+        # Create a linear ramp covering 10% of the length of the spectrum
+        left_ramp = np.arange(int(template_length / 10))
+        left_ramp = left_ramp / max(left_ramp)
+
+        # Ramp to use at right-hand end of spectrum is simply a back-to-front version of the left ramp
+        right_ramp = left_ramp[::-1]
+
+        middle_length = template_length - len(left_ramp) - len(right_ramp)
+
+        window_function = np.hstack([left_ramp,
+                                     np.ones(middle_length),
+                                     right_ramp
+                                     ])
+
+        return window_function
 
     def resample_single_arm(self, input_spectrum, arm_name):
         """
@@ -109,8 +162,62 @@ class RvInstanceCrossCorrelation(object):
         :param arm_name:
             The name of the arm within this 4MOST mode
         :return:
-            List of [RV value, chi-squared weight]
+            List of [RV value, weight]
         """
+
+        rv_fits = []
+
+        # Loop over all template spectra
+        for template_index, template_id in enumerate(self.templates_by_arm[mode][arm_name]):
+            template_spectrum = self.template_spectra[arm_name].extract_item(template_index)
+
+            input_array = input_spectrum.values * self.window_functions[arm_name]
+
+            cross_correlation = np.correlate(a=template_spectrum.values,
+                                             v=input_array,
+                                             mode='same')
+
+            # Find the index of the maximum of cross correlation function
+            max_position = np.where(cross_correlation == max(cross_correlation))[0][0]
+
+            # Make sure we don't go off the end of the array
+            if max_position < 1:
+                max_position = 1
+            if max_position > len(input_array) - 2:
+                max_position = len(input_array) - 2
+
+            # Now make three points which straddle the maximum
+            x_vals = np.array([max_position - 1, max_position, max_position + 1])
+            y_vals = cross_correlation[x_vals]
+
+            # Fit a quadratic curve through three points
+            def quadratic_curve(p, x):
+                return p[0] * x ** 2 + p[1] * x + p[2]
+
+            def quadratic_peak_x(p):
+                return -p[1] / (2 * p[0])
+
+            def quadratic_mismatch(p, x, y):
+                return quadratic_curve(p, x) - y
+
+            p0, p1, p2 = leastsq(func=quadratic_mismatch,
+                                 x0=np.array([0, 0, 0]),
+                                 args=(x_vals, y_vals)
+                                 )[0]
+
+            peak_x = quadratic_peak_x(p=(p0, p1, p2))
+
+            pixel_shift = peak_x - len(input_array) // 2
+
+            multiplicative_shift = pixel_shift * self.arm_properties[arm_name]['multiplicative_step']
+
+            c = 299792458.0
+            velocity = c * (pow(multiplicative_shift, 2) - 1) / (pow(multiplicative_shift, 2) + 1)
+            weight = max(cross_correlation)
+
+            rv_fits.append((velocity, weight))
+
+        return rv_fits
 
     def estimate_rv(self, input_spectrum, mode):
         """
@@ -139,239 +246,9 @@ class RvInstanceCrossCorrelation(object):
         rv_mean = (sum([rv * weight for rv, weight in rv_estimates]) /
                    sum([weight for rv, weight in rv_estimates]))
 
-        rv_variance = (sum([pow(rv-rv_mean, 2) * weight for rv, weight in rv_estimates]) /
+        rv_variance = (sum([pow(rv - rv_mean, 2) * weight for rv, weight in rv_estimates]) /
                        sum([weight for rv, weight in rv_estimates]))
 
         rv_std_dev = sqrt(rv_variance)
 
         return rv_mean, rv_std_dev
-
-    # --------------------------------------
-
-    def median_filter_flux(self, filename):
-
-        '''
-        inputs:
-        1. filename of the unnormalised 2dfdr spectrum, be like
-        '/priv/miner3/galah/2dfdr_reductions/aaorun/614/150606/1506060029013971.fits' (ccd1)
-
-        outputs:
-        1. interpolated, median filtered flux
-        2. the common wl grid
-        3. s/n
-        4. median filtered flux (un-interploated)
-        5. original wl grid, without nans
-        '''
-
-        if filename.split('.')[-2].endswith('1'):
-            grid=wave1
-        if filename.split('.')[-2].endswith('2'):
-            grid=wave2
-        if filename.split('.')[-2].endswith('3'):
-            grid=wave3
-
-        #starno=filename.split('_')[-1].split('.')[0]#galahic
-        starno=filename.split('.')[:-1]
-        hdu=pyfits.open(filename)
-        h = pyfits.getheader(filename)
-        x = np.arange(h['NAXIS1']) + 1 - h['CRPIX1']
-        wave = h['CDELT1']*x + h['CRVAL1']
-        d=hdu[0].data
-        #getting rid of the nan values at the beginning of the ccd
-        nan_end=np.where(np.isnan(np.array(hdu[0].data)[::-1][:2000]))
-        nan_beg=np.where(np.isnan(np.array(hdu[0].data)[:2000]))
-        try:
-            d=hdu[0].data[:-1*(nan_end[0][-1]+1)]
-            wave=wave[:-1*(nan_end[0][-1]+1)]
-        except:
-            pass
-        try:
-            d=d[nan_beg[0][-1]+1:]
-            wave=wave[nan_beg[0][-1]+1:]
-        except:
-            pass
-        nans2=np.where(np.isnan(d))[0] #for nans in the middle. but WHY ARE THERE NANS IN THE MIDDLE!?!!? GARH!
-        if len(nans2)!=0:
-            d[nans2]=np.mean(d[np.where(np.isnan(d)==False)])
-        #median filter smoothing and calculating s/n
-
-        signal = np.median(d)
-        noise = 1.4826/np.sqrt(2)*np.median(np.abs(d[1:] - d[:-1]))
-        snr = signal / noise
-        med_d = sig.medfilt(d,5) #5 pixels window
-        w = np.where(abs(med_d - d) > sigma * noise)[0]
-        d[w]=med_d[w]
-        sn=True
-
-        if filename.split('.')[-2].endswith('4'):
-            grid=wave3 #dummy, to be consistent with the function output format.
-            #exclude O2 absorption when measuring SNR
-            non_tel=np.where(wave>=telluric_region)[0]
-            fl=d[non_tel]
-            signal = np.median(fl)
-            noise = 1.4826/np.sqrt(2)*np.median(np.abs(fl[1:] - fl[:-1]))
-            snr = signal / noise
-
-        if snr <3 and filename.split('.')[-2].endswith('4')==False :
-            sn=False
-            sn_low.append(starno)
-        grid_min=min(grid, key=lambda x:abs(x-wave[0]))
-        grid_max=min(grid, key=lambda x:abs(x-wave[-1]))
-        grid=grid[np.where(grid==grid_min)[0][0]:np.where(grid==grid_max)[0][0]]
-        flux=np.interp(grid,wave,d)
-        return flux,grid,sn,snr,d,wave
-
-    def find_rv (self, model_ctm,flux,wave,filename):
-
-        '''
-        inputs:
-        1. model
-        2. data, ctm normalised
-        3. common wavelength gird
-        4. full path to fits
-
-        outputs:
-        1. rv
-        2. max(correlation coeff) for this particular model
-        '''
-
-        def fitfunc2(p,x):
-            return p[0]*x**2+p[1]*x+p[2]
-
-        def errfunc2(p,x,y):
-            return fitfunc2(p,x)-y
-
-        flux -= np.mean(flux) #get rid of the top hat like thingy
-        h=pyfits.getheader(filename)
-        if filename.split('.')[-2].endswith('1'):
-            cdelt1=wave1[1]-wave1[0]
-        if  filename.split('.')[-2].endswith('2'):
-            cdelt1=wave2[1]-wave2[0]
-        if filename.split('.')[-2].endswith('3'):
-            cdelt1=wave3[1]-wave3[0]
-
-        flux /= np.sqrt(np.sum(flux**2)) #normalise the flux
-        model_ctm1 = model_ctm- np.mean(model_ctm) #get rid of the top hat like thingy
-        model_ctm1 /= np.sqrt(np.sum(model_ctm1**2)) #normalise the flux
-
-        #window to smooth out the ends so it dont break when cross correlating yo
-        slope=np.arange(len(wave)*0.10)# creating a ramp using 10% of the spectrum on either side
-        window=np.hstack([slope,np.ones(len(wave)-len(slope)*2)*slope[-1],-1*slope+slope[-1]])
-        window=window/max(window)
-        model_ctm1=window*model_ctm1
-        flux=window*flux
-
-        #performing the cross correlation
-        coeff=np.correlate(model_ctm1,flux,mode='same')
-
-        max_index=np.where(coeff==max(coeff))[0][0]
-        #fitting the cross correlation peak
-        x_vals=np.array([max_index-1,max_index,max_index+1])
-        d=x_vals[-1]-len(coeff)
-        if d>=0:
-            x_vals=np.array([max_index-2,max_index-1,max_index])
-        try:
-            y_vals=coeff[x_vals]
-        except IndexError:
-            x_vals=np.array([max_index,max_index+1,max_index+2])
-        y_vals=coeff[x_vals]
-        p0,p1,p2=leastsq(errfunc2,[0,0,0],args=(x_vals,y_vals))[0]
-        x=np.arange(min(x_vals),max(x_vals),0.1)
-        max_x=x[np.where(p0*x**2+p1*x+p2==max(p0*x**2+p1*x+p2))[0][0]]
-        shift=max_x-len(model_ctm1)//2
-        dlambda=cdelt1*shift
-        velocity=-1*dlambda * 2.99792458e8 / (h['LAMBDAC']*1000)
-        #print velocity,max(coeff)
-        return velocity,max(coeff)
-
-    def run_rv (self, filename,folder):
-
-        '''
-        inputs:
-        1. path to file, just one ccd, it finds the rest 2 automatically
-        2. folder
-
-        outputs:
-        1. 3 rvs for 3 ccds
-        '''
-
-        #starno=filename.split('_')[-1].split('.')[0]#galahic
-        starno=filename.split('/')[-1][:-6]
-        #date=filename.split('/')[-1].split('_')[0][:-1]
-        #date=filename[:-1] #not really date
-        rvss=[]
-        snrs=[]
-        #checks sn
-
-        snr1=clean('%s/%s/combined/%s%s.fits'%(dir_str,folder,starno,'1'))[-3]#folder,date,ccd,galahic
-        snr2=clean('%s/%s/combined/%s%s.fits'%(dir_str,folder,starno,'2'))[-3]#folder,date,ccd,galahic
-        snr3=clean('%s/%s/combined/%s%s.fits'%(dir_str,folder,starno,'3'))[-3]#folder,date,ccd,galahic
-        snr4=clean('%s/%s/combined/%s%s.fits'%(dir_str,folder,starno,'4'))[-3]
-
-        snrs.append(snr1)
-        snrs.append(snr2)
-        snrs.append(snr3)
-        snrs.append(snr4)
-
-        for i in ['1','2','3']: #looping thru the ccds
-            filename='%s/%s/combined/%s%s.fits'%(dir_str,folder,starno,i)
-            flux,grid,sn,snr,a,b = self.median_filter_flux(filename)
-            snrs.append(snr)
-
-            if i =='1':
-                wavee=wave1
-                mm=m1
-                #excluding H regions when fitting continua
-                h_s=min(list(grid), key=lambda x:abs(x-4847))
-                h_e=min(list(grid), key=lambda x:abs(x-4900))
-                h_s_index=np.where(grid==h_s)[0][0]
-                h_e_index=np.where(grid==h_e)[0][0]
-                s = UnivariateSpline(np.hstack([grid[:h_s_index],grid[h_e_index:]]), np.hstack([flux[:h_s_index],flux[h_e_index:]]), s=1e15) #s=smoothing factor
-                flux_ctm=flux/s(grid)
-
-            if i == '2':
-                wavee=wave2
-                mm=m2
-                p0,p1,p2,p3,p4=leastsq(errfunc3,[0,0,0,0,0],args=(grid,flux))[0]
-                fit=p0*grid**4+p1*grid**3+p2*grid**2+p3*grid+p4
-                flux_ctm=flux/fit#(grid)
-
-            if i == '3':
-                wavee=wave3
-                mm=m3
-                h_s=min(list(grid), key=lambda x:abs(x-6530))
-                h_e=min(list(grid), key=lambda x:abs(x-6592))
-                h_s_index=np.where(grid==h_s)[0][0]
-                h_e_index=np.where(grid==h_e)[0][0]
-                s = UnivariateSpline(np.hstack([grid[:h_s_index],grid[h_e_index:]]), np.hstack([flux[:h_s_index],flux[h_e_index:]]), s=1e15)
-                flux_ctm=flux/s(grid)
-
-            model_s=np.where(wavee==grid[0])[0][0]
-            model_e=np.where(wavee==grid[-1])[0][0]
-            models=mm[0].data[:,model_s:model_e+1]
-
-            coeffs=[]
-            rvs=[]
-            #finding the rvs for all 15 models
-            for j in range(len(models))[0:-3]:
-                rv,coeff=find_rv(models[j],flux_ctm,grid,filename)
-                coeffs.append(coeff)
-                rvs.append(rv)
-            good_coeff=np.where(np.array(coeffs)>0.3)[0]
-            #only take the rvs where the cross correlation is reasonable (ie cross correlation
-            #coeff >0.3)
-            good_rv=np.array(rvs)[good_coeff]
-            #pdb.set_trace()
-            weights=np.array(coeffs)[good_coeff]/float(sum(np.array(coeffs)[good_coeff]))
-            #final rv for this ccd is the weighted sum of rvs from ~15 models, weighted by ccoeff
-            print('weighted rv', sum(weights*good_rv))
-            if sum(weights*good_rv) ==0 and i=='2': #incase the cc is crap
-                rvss.append(999)
-                continue
-            if sum(weights*good_rv) ==0 and (i=='1' or i=='3'):
-                bad_weights.append(starno)
-                return 999,snrs,999,1
-            rvss.append(sum(weights*good_rv))
-
-        if rvss != [] and len(rvss)==3 :
-            return rvss,snrs,0,0
