@@ -16,8 +16,6 @@ import logging
 import fourgp_speclib
 from fourgp_degrade.resample import SpectrumResampler
 
-from .templates_resample import logarithmic_raster
-
 logger = logging.getLogger(__name__)
 
 
@@ -66,20 +64,11 @@ class RvInstanceCrossCorrelation(object):
 
             # If we haven't already recreated the fixed-log-step wavelength raster for this arm, do it now
             if arm_name not in self.arm_rasters:
-                self.arm_rasters[arm_name] = logarithmic_raster(lambda_min=template_metadata['lambda_min'],
-                                                                lambda_max=template_metadata['lambda_max'],
-                                                                lambda_step=template_metadata['lambda_step'])
-
                 self.arm_properties[arm_name] = {
                     'lambda_min': template_metadata['lambda_min'],
                     'lambda_max': template_metadata['lambda_max'],
                     'lambda_step': template_metadata['lambda_step'],
-                    'multiplicative_step': self.arm_rasters[arm_name][1] / self.arm_rasters[arm_name][0]
                 }
-
-                self.window_functions[arm_name] = self.window_function(template_length=len(self.arm_rasters[arm_name]))
-                print("Arm {} requested length {}; got length {}".format(arm_name, len(self.arm_rasters[arm_name]),
-                                                                         self.window_functions[arm_name].shape))
 
         # Load library of template spectra for each arm
         self.template_spectra = {}
@@ -91,12 +80,17 @@ class RvInstanceCrossCorrelation(object):
                     shared_memory=True
                 )
 
+                self.arm_rasters[arm_name] = self.template_spectra[arm_name].wavelengths
+
+                self.arm_properties[arm_name]['multiplicative_step'] = (self.arm_rasters[arm_name][1] /
+                                                                        self.arm_rasters[arm_name][0])
+
+                self.window_functions[arm_name] = self.window_function(template_length=len(self.arm_rasters[arm_name]))
+
         # Multiply template spectra by window function
         for arm_name in self.template_spectra:
             for index in range(len(self.template_spectra[arm_name])):
                 template_spectrum = self.template_spectra[arm_name].extract_item(index=index)
-                print("Shape of template: {}".format(template_spectrum.values.shape))
-                print("Shape of window: {}".format(self.window_functions[arm_name].shape))
                 template_spectrum.values *= self.window_functions[arm_name]
 
     @staticmethod
@@ -190,6 +184,11 @@ class RvInstanceCrossCorrelation(object):
             x_vals = np.array([max_position - 1, max_position, max_position + 1])
             y_vals = cross_correlation[x_vals]
 
+            # Put peak close to zero for numerical stability
+            x_vals = x_vals - max_position
+            y_peak = y_vals[1]
+            y_vals = y_vals - y_peak
+
             # Fit a quadratic curve through three points
             def quadratic_curve(p, x):
                 return p[0] * x ** 2 + p[1] * x + p[2]
@@ -202,20 +201,27 @@ class RvInstanceCrossCorrelation(object):
 
             p0, p1, p2 = leastsq(func=quadratic_mismatch,
                                  x0=np.array([0, 0, 0]),
-                                 args=(x_vals, y_vals)
+                                 args=(x_vals, y_vals),
+                                 maxfev=10000
                                  )[0]
 
             peak_x = quadratic_peak_x(p=(p0, p1, p2))
 
+            # Shift peak back from zero to original position
+            peak_x = peak_x + max_position
+
+            # Convert position of peak of correlation function into a shift in pixels
             pixel_shift = peak_x - len(input_array) // 2
 
-            multiplicative_shift = pixel_shift * self.arm_properties[arm_name]['multiplicative_step']
+            # Convert pixel shift into multiplicative change in wavelength, based on fixed logarithmic stride
+            multiplicative_shift = pow(self.arm_properties[arm_name]['multiplicative_step'], pixel_shift)
 
+            # Convert multiplicative wavelength shift into a radial velocity
             c = 299792458.0
-            velocity = c * (pow(multiplicative_shift, 2) - 1) / (pow(multiplicative_shift, 2) + 1)
+            velocity = -c * (pow(multiplicative_shift, 2) - 1) / (pow(multiplicative_shift, 2) + 1)
             weight = max(cross_correlation)
 
-            rv_fits.append((velocity, weight))
+            rv_fits.append((velocity, weight, (max_position, len(input_array), x_vals, y_vals, (p0,p1,p2), peak_x, pixel_shift, multiplicative_shift, velocity, weight)))
 
         return rv_fits
 
@@ -243,12 +249,14 @@ class RvInstanceCrossCorrelation(object):
             )
             rv_estimates.extend(new_rv_estimates)
 
-        rv_mean = (sum([rv * weight for rv, weight in rv_estimates]) /
-                   sum([weight for rv, weight in rv_estimates]))
+        rv_mean = (sum([rv * weight for rv, weight, metadata in rv_estimates]) /
+                   sum([weight for rv, weight, metadata in rv_estimates]))
 
-        rv_variance = (sum([pow(rv - rv_mean, 2) * weight for rv, weight in rv_estimates]) /
-                       sum([weight for rv, weight in rv_estimates]))
+        rv_variance = (sum([pow(rv - rv_mean, 2) * weight for rv, weight, metadata in rv_estimates]) /
+                       sum([weight for rv, weight, metadata in rv_estimates]))
 
         rv_std_dev = sqrt(rv_variance)
 
-        return rv_mean, rv_std_dev
+        all_metadata = [metadata for rv, weight, metadata in rv_estimates]
+
+        return rv_mean, rv_std_dev, all_metadata
