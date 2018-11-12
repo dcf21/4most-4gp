@@ -12,6 +12,7 @@ from math import sqrt
 import numpy as np
 from scipy.optimize import leastsq
 import logging
+from operator import itemgetter
 
 import fourgp_speclib
 from fourgp_degrade.resample import SpectrumResampler
@@ -221,7 +222,9 @@ class RvInstanceCrossCorrelation(object):
             velocity = -c * (pow(multiplicative_shift, 2) - 1) / (pow(multiplicative_shift, 2) + 1)
             weight = max(cross_correlation)
 
-            rv_fits.append((velocity, weight, (max_position, len(input_array), x_vals, y_vals, (p0,p1,p2), peak_x, pixel_shift, multiplicative_shift, velocity, weight)))
+            rv_fits.append((velocity, weight, (max_position, len(input_array), x_vals, y_vals, (p0, p1, p2), peak_x,
+                                               pixel_shift, multiplicative_shift, velocity, weight)
+                            ))
 
         return rv_fits
 
@@ -241,6 +244,7 @@ class RvInstanceCrossCorrelation(object):
 
         arm_names = self.templates_by_arm[mode].keys()
 
+        # Compile a list of all the RV estimates, from all the arms and all the templates
         for arm_name in arm_names:
             new_rv_estimates = self.estimate_rv_from_single_arm(
                 input_spectrum=self.resample_single_arm(input_spectrum=input_spectrum, arm_name=arm_name),
@@ -249,9 +253,16 @@ class RvInstanceCrossCorrelation(object):
             )
             rv_estimates.extend(new_rv_estimates)
 
+        # Sort all the RV estimates into order of RV, and chuck out the bottom and top quartiles. This
+        # excludes estimates close to the speed of light from the subsequent statistics.
+        rv_estimates.sort(key=itemgetter(0))
+        rv_estimates = rv_estimates[len(rv_estimates) // 4: len(rv_estimates) * 3 // 4]
+
+        # Now form a weighted mean of all the RV estimates
         rv_mean = (sum([rv * weight for rv, weight, metadata in rv_estimates]) /
                    sum([weight for rv, weight, metadata in rv_estimates]))
 
+        # Work out the standard deviation of the mean
         rv_variance = (sum([pow(rv - rv_mean, 2) * weight for rv, weight, metadata in rv_estimates]) /
                        sum([weight for rv, weight, metadata in rv_estimates]))
 
