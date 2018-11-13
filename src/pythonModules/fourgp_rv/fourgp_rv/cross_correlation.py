@@ -228,7 +228,7 @@ class RvInstanceCrossCorrelation(object):
 
         return rv_fits
 
-    def estimate_rv(self, input_spectrum, mode):
+    def estimate_rv(self, input_spectrum, mode, arm_names=None):
         """
         Estimate the RV of a spectrum on the basis of all of the 4MOST arms of either HRS or LRS.
 
@@ -236,13 +236,16 @@ class RvInstanceCrossCorrelation(object):
             A Spectrum object, containing an observed spectrum
         :param mode:
             The name of the 4MOST mode this arm is part of -- either LRS or HRS
+        :param:
+            A list of the 4MOST arms to use, or None to use all possible arms.
         :return:
             [RV, error in RV]
         """
 
         rv_estimates = []
 
-        arm_names = self.templates_by_arm[mode].keys()
+        if arm_names is None:
+            arm_names = self.templates_by_arm[mode].keys()
 
         # Compile a list of all the RV estimates, from all the arms and all the templates
         for arm_name in arm_names:
