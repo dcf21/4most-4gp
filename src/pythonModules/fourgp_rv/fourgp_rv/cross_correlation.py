@@ -7,16 +7,15 @@ It is a heavily cleaned up version of Jane Lin's GUESS code, as used by GALAH. O
 <https://github.com/jlin0504/GUESS>.
 """
 
-from math import sqrt
-
-import numpy as np
-from scipy.optimize import leastsq
 import logging
+from math import sqrt
 from operator import itemgetter
-from scipy.interpolate import InterpolatedUnivariateSpline
 
 import fourgp_speclib
+import numpy as np
 from fourgp_degrade.resample import SpectrumResampler
+from scipy.interpolate import InterpolatedUnivariateSpline
+from scipy.optimize import leastsq
 
 from .templates_resample import logarithmic_raster
 
@@ -93,8 +92,12 @@ class RvInstanceCrossCorrelation(object):
                 self.arm_properties[arm_name]['multiplicative_step'] = (self.arm_rasters[arm_name][1] /
                                                                         self.arm_rasters[arm_name][0])
 
+                window_function_length = len(self.arm_rasters[arm_name])
+                if self.upsampling > 1:
+                    window_function_length = (len(self.arm_rasters[arm_name]) - 1) * upsampling
+
                 self.window_functions[arm_name] = self.window_function(
-                    template_length=(len(self.arm_rasters[arm_name]) - 1) * upsampling
+                    template_length=window_function_length
                 )
 
         # Multiply template spectra by window function
