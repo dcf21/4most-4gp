@@ -13,9 +13,12 @@ import numpy as np
 from scipy.optimize import leastsq
 import logging
 from operator import itemgetter
+from scipy.interpolate import InterpolatedUnivariateSpline
 
 import fourgp_speclib
 from fourgp_degrade.resample import SpectrumResampler
+
+from .templates_resample import logarithmic_raster
 
 logger = logging.getLogger(__name__)
 
@@ -25,20 +28,24 @@ class RvInstanceCrossCorrelation(object):
     A class which is adapted from Jane Lin's GUESS code, as used by GALAH.
     """
 
-    def __init__(self, spectrum_library):
+    def __init__(self, spectrum_library, upsampling=1):
         """
         Instantiate the RV code, and read from disk the library of template spectra used for cross correlation.
 
         :param spectrum_library:
             A SpectrumLibrary containing the template spectra we use for modelling.
-
+        :param upsampling:
+            The factor by which to up-sample the spectrum before doing cross-correlation. A value of 1 means we don't
+            up sample.
         :type spectrum_library:
             SpectrumLibrary
         """
 
         assert isinstance(spectrum_library, fourgp_speclib.SpectrumLibrary), \
             "Argument to RvInstanceCrossCorrelation should be a SpectrumLibrary."
+
         self._spectrum_library = spectrum_library
+        self.upsampling = upsampling
 
         # Load template spectra
         spectrum_list = self._spectrum_library.search(continuum_normalised=1)
@@ -86,12 +93,20 @@ class RvInstanceCrossCorrelation(object):
                 self.arm_properties[arm_name]['multiplicative_step'] = (self.arm_rasters[arm_name][1] /
                                                                         self.arm_rasters[arm_name][0])
 
-                self.window_functions[arm_name] = self.window_function(template_length=len(self.arm_rasters[arm_name]))
+                self.window_functions[arm_name] = self.window_function(
+                    template_length=(len(self.arm_rasters[arm_name]) - 1) * upsampling
+                )
 
         # Multiply template spectra by window function
         for arm_name in self.template_spectra:
             for index in range(len(self.template_spectra[arm_name])):
                 template_spectrum = self.template_spectra[arm_name].extract_item(index=index)
+
+                if self.upsampling > 1:
+                    template_spectrum = self.upsample_spectrum(
+                        input=template_spectrum,
+                        upsampling_factor=self.upsampling)
+
                 template_spectrum.values *= self.window_functions[arm_name]
 
     @staticmethod
@@ -143,7 +158,8 @@ class RvInstanceCrossCorrelation(object):
 
         return resampled_spectrum
 
-    def estimate_rv_from_single_arm(self, input_spectrum, mode, arm_name):
+    def estimate_rv_from_single_arm(self, input_spectrum, mode, arm_name, interpolation_scheme="quadratic",
+                                    interpolation_pixels=3):
         """
         Estimate the RV of a spectrum on the basis of data from a single arm. We return a list of RV estimates from
         cross correlation with each of the template spectra, and the chi-squared mismatch of each template spectrum
@@ -156,15 +172,30 @@ class RvInstanceCrossCorrelation(object):
             The name of the 4MOST mode this arm is part of -- either LRS or HRS
         :param arm_name:
             The name of the arm within this 4MOST mode
+        :param interpolation_scheme:
+            The type of function to use to interpolate the CCF to measure sub-pixel RVs.
+        :param interpolation_pixels:
+            The number of pixels around the peak of the CCF to use when interpolating to measure sub-pixel RVs.
         :return:
             List of [RV value, weight]
         """
 
+        assert interpolation_scheme in self.supported_interpolation_schemes()
+
         rv_fits = []
+
+        if self.upsampling > 1:
+            input_spectrum = self.upsample_spectrum(input=input_spectrum, upsampling_factor=self.upsampling)
 
         # Loop over all template spectra
         for template_index, template_id in enumerate(self.templates_by_arm[mode][arm_name]):
-            template_spectrum = self.template_spectra[arm_name].extract_item(template_index)
+            template_spectrum = self.template_spectra[arm_name].extract_item(index=template_index)
+
+            # Look up stellar parameters of this template
+            template_metadata = self.template_spectra[arm_name].get_metadata(index=template_index)
+            teff = template_metadata['Teff']
+            logg = template_metadata['logg']
+            fe_h = template_metadata['[Fe/H]']
 
             input_array = input_spectrum.values * self.window_functions[arm_name]
 
@@ -176,13 +207,15 @@ class RvInstanceCrossCorrelation(object):
             max_position = np.where(cross_correlation == max(cross_correlation))[0][0]
 
             # Make sure we don't go off the end of the array
-            if max_position < 1:
-                max_position = 1
-            if max_position > len(input_array) - 2:
-                max_position = len(input_array) - 2
+            if max_position < (interpolation_pixels // 2):
+                max_position = (interpolation_pixels // 2)
+            if max_position > len(input_array) - 1 - (interpolation_pixels // 2):
+                max_position = len(input_array) - 1 - (interpolation_pixels // 2)
 
             # Now make three points which straddle the maximum
-            x_vals = np.array([max_position - 1, max_position, max_position + 1])
+            x_min = max_position - interpolation_pixels // 2
+            x_max = x_min + interpolation_pixels
+            x_vals = np.array(range(x_min, x_max + 1))
             y_vals = cross_correlation[x_vals]
 
             # Put peak close to zero for numerical stability
@@ -190,23 +223,11 @@ class RvInstanceCrossCorrelation(object):
             y_peak = y_vals[1]
             y_vals = y_vals - y_peak
 
-            # Fit a quadratic curve through three points
-            def quadratic_curve(p, x):
-                return p[0] * x ** 2 + p[1] * x + p[2]
-
-            def quadratic_peak_x(p):
-                return -p[1] / (2 * p[0])
-
-            def quadratic_mismatch(p, x, y):
-                return quadratic_curve(p, x) - y
-
-            p0, p1, p2 = leastsq(func=quadratic_mismatch,
-                                 x0=np.array([0, 0, 0]),
-                                 args=(x_vals, y_vals),
-                                 maxfev=10000
-                                 )[0]
-
-            peak_x = quadratic_peak_x(p=(p0, p1, p2))
+            # Do interpolation
+            if interpolation_scheme == "quadratic":
+                peak_x = self.interpolation_quadratic(x_vals=x_vals, y_vals=y_vals)
+            else:
+                peak_x = self.interpolation_spline(x_vals=x_vals, y_vals=y_vals)
 
             # Shift peak back from zero to original position
             peak_x = peak_x + max_position
@@ -222,13 +243,110 @@ class RvInstanceCrossCorrelation(object):
             velocity = -c * (pow(multiplicative_shift, 2) - 1) / (pow(multiplicative_shift, 2) + 1)
             weight = max(cross_correlation)
 
-            rv_fits.append((velocity, weight, (max_position, len(input_array), x_vals, y_vals, (p0, p1, p2), peak_x,
-                                               pixel_shift, multiplicative_shift, velocity, weight)
-                            ))
+            rv_fits.append(
+                (velocity, weight, (teff, logg, fe_h))
+            )
 
         return rv_fits
 
-    def estimate_rv(self, input_spectrum, mode, arm_names=None):
+    @staticmethod
+    def interpolation_quadratic(x_vals, y_vals):
+        """
+        Use quadratic interpolation to find the sub-pixel position of the peak of the CCF
+
+        :param x_vals:
+            If the CCF is y(x), this is the array of the x values of the data points supplied to interpolate.
+        :param y_vals:
+            If the CCF is y(x), this is the array of the y values of the data points supplied to interpolate.
+        :return:
+            Our best estimate of the position of the peak.
+        """
+
+        # Fit a quadratic curve through three points
+        def quadratic_curve(p, x):
+            return p[0] * x ** 2 + p[1] * x + p[2]
+
+        def quadratic_peak_x(p):
+            return -p[1] / (2 * p[0])
+
+        def quadratic_mismatch(p, x, y):
+            return quadratic_curve(p, x) - y
+
+        p0, p1, p2 = leastsq(func=quadratic_mismatch,
+                             x0=np.array([0, 0, 0]),
+                             args=(x_vals, y_vals),
+                             maxfev=10000
+                             )[0]
+
+        peak_x = quadratic_peak_x(p=(p0, p1, p2))
+        return peak_x
+
+    @staticmethod
+    def interpolation_spline(x_vals, y_vals):
+        """
+        Use cubic spline interpolation to find the sub-pixel position of the peak of the CCF
+
+        :param x_vals:
+            If the CCF is y(x), this is the array of the x values of the data points supplied to interpolate.
+        :param y_vals:
+            If the CCF is y(x), this is the array of the y values of the data points supplied to interpolate.
+        :return:
+            Our best estimate of the position of the peak.
+        """
+
+        def quadratic_spline_roots(spl):
+            roots = []
+            knots = spl.get_knots()
+            for a, b in zip(knots[:-1], knots[1:]):
+                u, v, w = spl(a), spl((a + b) / 2), spl(b)
+                t = np.roots([u + w - 2 * v, w - u, 2 * v])
+                t = t[np.isreal(t) & (np.abs(t) <= 1)]
+                roots.extend(t * (b - a) / 2 + (b + a) / 2)
+            return np.array(roots)
+
+        f = InterpolatedUnivariateSpline(x=x_vals, y=y_vals)
+        cr_pts = quadratic_spline_roots(f.derivative())
+        cr_vals = f(cr_pts)
+        max_index = np.argmax(cr_vals)
+        return cr_pts[max_index]
+
+    @staticmethod
+    def supported_interpolation_schemes():
+        return "quadratic", "spline"
+
+    def upsample_spectrum(self, input, upsampling_factor):
+        """
+        Upsample a spectrum object using cubic spline interpolation
+        :param input:
+            The Spectrum object we should up sample
+        :param upsampling_factor:
+            The integer factor by which to up-sample the spectrum
+        :return:
+            An up-sampled Spectrum object
+        """
+
+        multiplicative_spacing_in = input.wavelengths[1] / input.wavelengths[0]
+        multiplicative_spacing_out = pow(multiplicative_spacing_in, 1. / upsampling_factor)
+
+        # We impose an explicit length on the output, because the arange here is numerically unstable about whether
+        # it includes the final point or not
+        raster_in_length = len(input.wavelengths)
+        raster_out_length = (raster_in_length - 1) * upsampling_factor
+
+        raster_out = logarithmic_raster(lambda_min=input.wavelengths[0],
+                                        lambda_max=input.wavelengths[-1],
+                                        lambda_step=input.wavelengths[0] * (multiplicative_spacing_out - 1)
+                                        )[:raster_out_length]
+
+        f = InterpolatedUnivariateSpline(x=input.wavelengths, y=input.values)
+
+        return fourgp_speclib.Spectrum(wavelengths=raster_out,
+                                       values=f(raster_out),
+                                       value_errors=np.zeros_like(raster_out)
+                                       )
+
+    def estimate_rv(self, input_spectrum, mode, arm_names=None, interpolation_scheme="quadratic",
+                    interpolation_pixels=3):
         """
         Estimate the RV of a spectrum on the basis of all of the 4MOST arms of either HRS or LRS.
 
@@ -236,11 +354,17 @@ class RvInstanceCrossCorrelation(object):
             A Spectrum object, containing an observed spectrum
         :param mode:
             The name of the 4MOST mode this arm is part of -- either LRS or HRS
-        :param:
+        :param arm_names:
             A list of the 4MOST arms to use, or None to use all possible arms.
+        :param interpolation_scheme:
+            The type of function to use to interpolate the CCF to measure sub-pixel RVs.
+        :param interpolation_pixels:
+            The number of pixels around the peak of the CCF to use when interpolating to measure sub-pixel RVs.
         :return:
             [RV, error in RV]
         """
+
+        assert interpolation_scheme in self.supported_interpolation_schemes()
 
         rv_estimates = []
 
@@ -252,9 +376,16 @@ class RvInstanceCrossCorrelation(object):
             new_rv_estimates = self.estimate_rv_from_single_arm(
                 input_spectrum=self.resample_single_arm(input_spectrum=input_spectrum, arm_name=arm_name),
                 mode=mode,
-                arm_name=arm_name
+                arm_name=arm_name,
+                interpolation_scheme=interpolation_scheme,
+                interpolation_pixels=interpolation_pixels
             )
             rv_estimates.extend(new_rv_estimates)
+
+        # Sort all the RV estimates into order of weight, and extract the stellar parameters of the best fitting
+        # template
+        rv_estimates.sort(key=itemgetter(1))
+        stellar_parameters = rv_estimates[-1][2]
 
         # Sort all the RV estimates into order of RV, and chuck out the bottom and top quartiles. This
         # excludes estimates close to the speed of light from the subsequent statistics.
@@ -271,6 +402,4 @@ class RvInstanceCrossCorrelation(object):
 
         rv_std_dev = sqrt(rv_variance)
 
-        all_metadata = [metadata for rv, weight, metadata in rv_estimates]
-
-        return rv_mean, rv_std_dev, all_metadata
+        return rv_mean, rv_std_dev, stellar_parameters
