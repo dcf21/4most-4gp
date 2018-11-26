@@ -100,7 +100,7 @@ class RvInstanceCrossCorrelation(object):
                     template_length=window_function_length
                 )
 
-        # Multiply template spectra by window function
+        # Multiply template spectra by window function and normalise
         for arm_name in self.template_spectra:
             for index in range(len(self.template_spectra[arm_name])):
                 template_spectrum = self.template_spectra[arm_name].extract_item(index=index)
@@ -110,7 +110,13 @@ class RvInstanceCrossCorrelation(object):
                         input=template_spectrum,
                         upsampling_factor=self.upsampling)
 
+                # Multiply template by window function
                 template_spectrum.values *= self.window_functions[arm_name]
+
+                template_sum = np.sum(template_spectrum.values)
+
+                # Renormalise template
+                template_spectrum.values *= 1. / template_sum
 
     @staticmethod
     def window_function(template_length):
@@ -143,7 +149,8 @@ class RvInstanceCrossCorrelation(object):
     def resample_single_arm(self, input_spectrum, arm_name):
         """
         Resample an input spectrum onto a raster with fixed logarithmic stride, representing a single 4MOST arm. We
-        use the same wavelength rasters that the template spectra were sampled onto.
+        use the same wavelength rasters that the template spectra were sampled onto. We also renormalise the resampled
+        spectrum so that all the pixels sum to one.
 
         :param input_spectrum:
             A Spectrum object, containing an observed spectrum
@@ -153,11 +160,18 @@ class RvInstanceCrossCorrelation(object):
             A Spectrum object containing a single arm of 4MOST data, resampled with a fixed logarithmic stride.
         """
 
+        # Look up the raster we are to resample onto
         new_raster = self.arm_rasters[arm_name]
 
+        # Resample the input spectrum onto new raster
         resampler = SpectrumResampler(input_spectrum=input_spectrum)
 
         resampled_spectrum = resampler.onto_raster(output_raster=new_raster, resample_errors=True, resample_mask=False)
+
+        # Renormalise the output spectrum
+        resampled_spectrum_sum = np.sum(resampled_spectrum.values)
+
+        resampled_spectrum.values *= 1. / resampled_spectrum_sum
 
         return resampled_spectrum
 
@@ -388,6 +402,7 @@ class RvInstanceCrossCorrelation(object):
         # Sort all the RV estimates into order of weight, and extract the stellar parameters of the best fitting
         # template
         rv_estimates.sort(key=itemgetter(1))
+        rv_estimates_by_weight = rv_estimates.copy()
         stellar_parameters = rv_estimates[-1][2]
 
         # Sort all the RV estimates into order of RV, and chuck out the bottom and top quartiles. This
@@ -405,4 +420,4 @@ class RvInstanceCrossCorrelation(object):
 
         rv_std_dev = sqrt(rv_variance)
 
-        return rv_mean, rv_std_dev, stellar_parameters
+        return rv_mean, rv_std_dev, stellar_parameters, rv_estimates_by_weight
