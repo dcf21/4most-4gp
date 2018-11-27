@@ -78,16 +78,16 @@ class RvInstanceCrossCorrelation(object):
                 }
 
         # Load library of template spectra for each arm
-        self.template_spectra = {}
+        self.template_spectra_raw = {}
 
         for mode in self.templates_by_arm:
             for arm_name in self.templates_by_arm[mode]:
-                self.template_spectra[arm_name] = self._spectrum_library.open(
+                self.template_spectra_raw[arm_name] = self._spectrum_library.open(
                     ids=self.templates_by_arm[mode][arm_name],
                     shared_memory=True
                 )
 
-                self.arm_rasters[arm_name] = self.template_spectra[arm_name].wavelengths
+                self.arm_rasters[arm_name] = self.template_spectra_raw[arm_name].wavelengths
 
                 self.arm_properties[arm_name]['multiplicative_step'] = (self.arm_rasters[arm_name][1] /
                                                                         self.arm_rasters[arm_name][0])
@@ -101,9 +101,13 @@ class RvInstanceCrossCorrelation(object):
                 )
 
         # Multiply template spectra by window function and normalise
-        for arm_name in self.template_spectra:
-            for index in range(len(self.template_spectra[arm_name])):
-                template_spectrum = self.template_spectra[arm_name].extract_item(index=index)
+        self.template_spectra_tapered = {}
+
+        for arm_name in self.template_spectra_raw:
+            new_template_list = []
+
+            for index in range(len(self.template_spectra_raw[arm_name])):
+                template_spectrum = self.template_spectra_raw[arm_name].extract_item(index=index)
 
                 if self.upsampling > 1:
                     template_spectrum = self.upsample_spectrum(
@@ -117,6 +121,15 @@ class RvInstanceCrossCorrelation(object):
 
                 # Renormalise template
                 template_spectrum.values *= 1. / template_sum
+
+                # Add modified template to list of updated templates for this arm
+                new_template_list.append(template_spectrum)
+
+            # Create new spectrum array of modified template spectra
+            self.template_spectra_tapered[arm_name] = fourgp_speclib.SpectrumArray.from_spectra(
+                spectra=new_template_list,
+                                                                                                shared_memory=True
+            )
 
     @staticmethod
     def window_function(template_length):
@@ -206,10 +219,10 @@ class RvInstanceCrossCorrelation(object):
 
         # Loop over all template spectra
         for template_index, template_id in enumerate(self.templates_by_arm[mode][arm_name]):
-            template_spectrum = self.template_spectra[arm_name].extract_item(index=template_index)
+            template_spectrum = self.template_spectra_tapered[arm_name].extract_item(index=template_index)
 
             # Look up stellar parameters of this template
-            template_metadata = self.template_spectra[arm_name].get_metadata(index=template_index)
+            template_metadata = self.template_spectra_tapered[arm_name].get_metadata(index=template_index)
             teff = template_metadata['Teff']
             logg = template_metadata['logg']
             fe_h = template_metadata['[Fe/H]']
@@ -253,7 +266,8 @@ class RvInstanceCrossCorrelation(object):
             pixel_shift = peak_x - len(input_array) // 2
 
             # Convert pixel shift into multiplicative change in wavelength, based on fixed logarithmic stride
-            multiplicative_shift = pow(self.arm_properties[arm_name]['multiplicative_step'], pixel_shift)
+            multiplicative_shift = pow(self.arm_properties[arm_name]['multiplicative_step'],
+                                       pixel_shift / self.upsampling)
 
             # Convert multiplicative wavelength shift into a radial velocity
             c = 299792458.0
@@ -345,7 +359,7 @@ class RvInstanceCrossCorrelation(object):
         multiplicative_spacing_in = input.wavelengths[1] / input.wavelengths[0]
         multiplicative_spacing_out = pow(multiplicative_spacing_in, 1. / upsampling_factor)
 
-        # We impose an explicit length on the output, because the arange here is numerically unstable about whether
+        # We impose an explicit length on the output, because the arange() here is numerically unstable about whether
         # it includes the final point or not
         raster_in_length = len(input.wavelengths)
         raster_out_length = (raster_in_length - 1) * upsampling_factor
@@ -359,7 +373,8 @@ class RvInstanceCrossCorrelation(object):
 
         return fourgp_speclib.Spectrum(wavelengths=raster_out,
                                        values=f(raster_out),
-                                       value_errors=np.zeros_like(raster_out)
+                                       value_errors=np.zeros_like(raster_out),
+                                       metadata=input.metadata
                                        )
 
     def estimate_rv(self, input_spectrum, mode, arm_names=None, interpolation_scheme="quadratic",
