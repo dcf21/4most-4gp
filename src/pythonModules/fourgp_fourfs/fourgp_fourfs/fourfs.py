@@ -29,7 +29,8 @@ class FourFS:
                  run_lrs=True,
                  run_hrs=True,
                  lrs_use_snr_definitions=None,
-                 hrs_use_snr_definitions=None
+                 hrs_use_snr_definitions=None,
+                 identifier="x"
                  ):
         """
         Instantiate a class for calling 4FS.
@@ -69,6 +70,10 @@ class FourFS:
 
         :param hrs_use_snr_definitions:
             List of three SNR definitions to use for the red, green and blue bands of 4MOST HRS.
+
+        :param identifier:
+            A string identifier for this 4FS instance. This only matters if we have multiple 4FS instances running
+            from a single process, and need to make sure they have separate working directories in </tmp>.
         """
         self.path_to_4fs = path_to_4fs
         self.run_lrs = run_lrs
@@ -110,7 +115,7 @@ class FourFS:
                                              if isinstance(i, str) and len(i) > 0])
 
         # Create temporary directory
-        self.id_string = "4fs_{:d}".format(os.getpid())
+        self.id_string = "4fs_{:d}_{}".format(os.getpid(), identifier)
         self.tmp_dir = os_path.join("/tmp", self.id_string)
         os.system("mkdir -p {}".format(self.tmp_dir))
 

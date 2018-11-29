@@ -423,7 +423,8 @@ class RvInstanceCrossCorrelation(object):
         # Sort all the RV estimates into order of RV, and chuck out the bottom and top quartiles. This
         # excludes estimates close to the speed of light from the subsequent statistics.
         rv_estimates.sort(key=itemgetter(0))
-        rv_estimates = rv_estimates[len(rv_estimates) // 4: len(rv_estimates) * 3 // 4]
+        if len(rv_estimates) >= 4:
+            rv_estimates = rv_estimates[len(rv_estimates) // 4: len(rv_estimates) * 3 // 4]
 
         # Now form a weighted mean of all the RV estimates
         rv_mean = (sum([rv * weight for rv, weight, metadata in rv_estimates]) /
