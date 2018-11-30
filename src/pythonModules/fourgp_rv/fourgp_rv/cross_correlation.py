@@ -128,7 +128,7 @@ class RvInstanceCrossCorrelation(object):
             # Create new spectrum array of modified template spectra
             self.template_spectra_tapered[arm_name] = fourgp_speclib.SpectrumArray.from_spectra(
                 spectra=new_template_list,
-                                                                                                shared_memory=True
+                shared_memory=True
             )
 
     @staticmethod
@@ -244,7 +244,7 @@ class RvInstanceCrossCorrelation(object):
 
             # Now make three points which straddle the maximum
             x_min = max_position - interpolation_pixels // 2
-            x_max = x_min + interpolation_pixels
+            x_max = x_min + interpolation_pixels - 1
             x_vals = np.array(range(x_min, x_max + 1))
             y_vals = cross_correlation[x_vals]
 
@@ -255,8 +255,17 @@ class RvInstanceCrossCorrelation(object):
 
             # Do interpolation
             if interpolation_scheme == "quadratic":
-                peak_x = self.interpolation_quadratic(x_vals=x_vals, y_vals=y_vals)
+                if len(x_vals) == 3:
+                    if template_index == 0:
+                        logger.info("Using analytic quadratic interpolation")
+                    peak_x = self.interpolation_quadratic_dcf(x_vals=x_vals, y_vals=y_vals)
+                else:
+                    if template_index == 0:
+                        logger.info("Using numerical quadratic interpolation")
+                    peak_x = self.interpolation_quadratic_galah(x_vals=x_vals, y_vals=y_vals)
             else:
+                if template_index == 0:
+                    logger.info("Using spline interpolation")
                 peak_x = self.interpolation_spline(x_vals=x_vals, y_vals=y_vals)
 
             # Shift peak back from zero to original position
@@ -281,9 +290,10 @@ class RvInstanceCrossCorrelation(object):
         return rv_fits
 
     @staticmethod
-    def interpolation_quadratic(x_vals, y_vals):
+    def interpolation_quadratic_galah(x_vals, y_vals):
         """
-        Use quadratic interpolation to find the sub-pixel position of the peak of the CCF
+        Use quadratic interpolation to find the sub-pixel position of the peak of the CCF. This is the GALAH way
+        of doing it, which uses numerical fitting rather than an analytic solution
 
         :param x_vals:
             If the CCF is y(x), this is the array of the x values of the data points supplied to interpolate.
@@ -310,6 +320,37 @@ class RvInstanceCrossCorrelation(object):
                              )[0]
 
         peak_x = quadratic_peak_x(p=(p0, p1, p2))
+        return peak_x
+
+    @staticmethod
+    def interpolation_quadratic_dcf(x_vals, y_vals):
+        """
+        Use quadratic interpolation to find the sub-pixel position of the peak of the CCF. This is Dominic's version
+        which uses analytic solution
+
+        :param x_vals:
+            If the CCF is y(x), this is the array of the x values of the data points supplied to interpolate.
+        :param y_vals:
+            If the CCF is y(x), this is the array of the y values of the data points supplied to interpolate.
+        :return:
+            Our best estimate of the position of the peak.
+        """
+
+        assert len(x_vals) == 3  # This analytic solution only works with three input points
+        assert x_vals[1] == 0  # Three points must be centred around x==0
+        assert x_vals[2] == - x_vals[0]
+
+        def quadratic_peak_x(p):
+            return -p[1] / (2 * p[0])
+
+        p2 = y_vals[1]
+
+        p0 = (y_vals[0] + y_vals[2]) / (2 * x_vals[0] ** 2)
+
+        p1 = (y_vals[0] - y_vals[2]) / (2 * x_vals[0])
+
+        peak_x = quadratic_peak_x(p=(p0, p1, p2))
+
         return peak_x
 
     @staticmethod
