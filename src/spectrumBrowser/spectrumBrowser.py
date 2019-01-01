@@ -1,5 +1,12 @@
-#!/usr/bin/env python3
+#!../../../virtualenv/bin/python3
 # -*- coding: utf-8 -*-
+
+# NB: The shebang line above assumes you've installed a python virtual
+# environment alongside your working copy of the <4most-4gp> git repository. It
+# also only works if you invoke this python script from the directory where it
+# is located. If these two assumptions are incorrect (e.g. you're using Conda),
+# you can still use this script by typing <python spectrumBrowser.py>, but
+# <./spectrumBrowser.py> will not work.
 
 from os import path as os_path
 from flask import Flask, render_template, url_for, request, make_response
@@ -202,7 +209,7 @@ def spectrum_png(library, spec_id, lambda_min, lambda_max):
     ax.grid(True)
     ax.plot(spectrum.wavelengths, spectrum.values)
     canvas = FigureCanvas(fig)
-    png_output = io.StringIO()
+    png_output = io.BytesIO()
     canvas.print_png(png_output)
     response = make_response(png_output.getvalue())
     response.headers['Content-Type'] = 'image/png'
