@@ -42,7 +42,7 @@ def command_line_interface(root_path):
                         help="Directory where we expect to find spectrum libraries")
     parser.add_argument('--templates-out',
                         required=False,
-                        default="resampled_rv_templates",
+                        default="rv_templates_resampled",
                         dest="templates_out",
                         help="Library into which to place resampled templates for RV code")
     parser.add_argument('--binary-path',
