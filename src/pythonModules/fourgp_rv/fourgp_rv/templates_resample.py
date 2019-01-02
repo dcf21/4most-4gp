@@ -188,6 +188,12 @@ def resample_templates(args, logger):
                         # Replace errors which are nans with a large value
                         mock_observed.value_errors[np.isnan(mock_observed.value_errors)] = 1000.
 
+                        # Check for NaN values in spectrum itself
+                        if not np.all(np.isfinite(mock_observed.values)):
+                            print("Warning: NaN values in template <{}>".format(template_flux_normalised.metadata['Starname']))
+                            mock_observed.values[np.isnan(mock_observed.values)] = 1.
+                            mock_observed.value_errors[np.isnan(mock_observed.values)] = 1000.
+
                         # Resample template onto a logarithmic raster of fixed step
                         resampler = SpectrumResampler(mock_observed)
 
