@@ -119,6 +119,7 @@ def resample_templates(args, logger):
     etc_wrapper = FourFS(
         path_to_4fs=os_path.join(args.binary_path, "OpSys/ETC"),
         snr_list=[250.],
+        magnitude=13,
         snr_per_pixel=True
     )
 

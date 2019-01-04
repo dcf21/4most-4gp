@@ -234,39 +234,46 @@ class RvInstanceCrossCorrelation(object):
                                              mode='same')
 
             # Find the index of the maximum of cross correlation function
-            max_position = np.where(cross_correlation == max(cross_correlation))[0][0]
+            try:
+                max_position = np.where(cross_correlation == max(cross_correlation))[0][0]
+            except IndexError:
+                print("Warning: Cross-correlation failed")
+                max_position = np.nan
 
-            # Make sure we don't go off the end of the array
-            if max_position < (interpolation_pixels // 2):
-                max_position = (interpolation_pixels // 2)
-            if max_position > len(input_array) - 1 - (interpolation_pixels // 2):
-                max_position = len(input_array) - 1 - (interpolation_pixels // 2)
+            if np.isfinite(max_position):
+                # Make sure we don't go off the end of the array
+                if max_position < (interpolation_pixels // 2):
+                    max_position = (interpolation_pixels // 2)
+                if max_position > len(input_array) - 1 - (interpolation_pixels // 2):
+                    max_position = len(input_array) - 1 - (interpolation_pixels // 2)
 
-            # Now make three points which straddle the maximum
-            x_min = max_position - interpolation_pixels // 2
-            x_max = x_min + interpolation_pixels - 1
-            x_vals = np.array(range(x_min, x_max + 1))
-            y_vals = cross_correlation[x_vals]
+                # Now make three points which straddle the maximum
+                x_min = max_position - interpolation_pixels // 2
+                x_max = x_min + interpolation_pixels - 1
+                x_vals = np.array(range(x_min, x_max + 1))
+                y_vals = cross_correlation[x_vals]
 
-            # Put peak close to zero for numerical stability
-            x_vals = x_vals - max_position
-            y_peak = y_vals[1]
-            y_vals = y_vals - y_peak
+                # Put peak close to zero for numerical stability
+                x_vals = x_vals - max_position
+                y_peak = y_vals[1]
+                y_vals = y_vals - y_peak
 
-            # Do interpolation
-            if interpolation_scheme == "quadratic":
-                if len(x_vals) == 3:
-                    if template_index == 0:
-                        logger.info("Using analytic quadratic interpolation")
-                    peak_x = self.interpolation_quadratic_dcf(x_vals=x_vals, y_vals=y_vals)
+                # Do interpolation
+                if interpolation_scheme == "quadratic":
+                    if len(x_vals) == 3:
+                        if template_index == 0:
+                            logger.info("Using analytic quadratic interpolation")
+                        peak_x = self.interpolation_quadratic_dcf(x_vals=x_vals, y_vals=y_vals)
+                    else:
+                        if template_index == 0:
+                            logger.info("Using numerical quadratic interpolation")
+                        peak_x = self.interpolation_quadratic_galah(x_vals=x_vals, y_vals=y_vals)
                 else:
                     if template_index == 0:
-                        logger.info("Using numerical quadratic interpolation")
-                    peak_x = self.interpolation_quadratic_galah(x_vals=x_vals, y_vals=y_vals)
+                        logger.info("Using spline interpolation")
+                    peak_x = self.interpolation_spline(x_vals=x_vals, y_vals=y_vals)
             else:
-                if template_index == 0:
-                    logger.info("Using spline interpolation")
-                peak_x = self.interpolation_spline(x_vals=x_vals, y_vals=y_vals)
+                peak_x = np.nan
 
             # Shift peak back from zero to original position
             peak_x = peak_x + max_position
@@ -379,6 +386,8 @@ class RvInstanceCrossCorrelation(object):
         f = InterpolatedUnivariateSpline(x=x_vals, y=y_vals)
         cr_pts = quadratic_spline_roots(f.derivative())
         cr_vals = f(cr_pts)
+        if len(cr_vals) == 0:
+            return np.nan
         max_index = np.argmax(cr_vals)
         return cr_pts[max_index]
 
