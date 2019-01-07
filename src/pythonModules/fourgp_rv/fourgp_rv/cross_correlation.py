@@ -189,7 +189,7 @@ class RvInstanceCrossCorrelation(object):
         return resampled_spectrum
 
     def estimate_rv_from_single_arm(self, input_spectrum, mode, arm_name, interpolation_scheme="quadratic",
-                                    interpolation_pixels=3):
+                                    interpolation_pixels=3, limit_to_best=16):
         """
         Estimate the RV of a spectrum on the basis of data from a single arm. We return a list of RV estimates from
         cross correlation with each of the template spectra, and the chi-squared mismatch of each template spectrum
@@ -206,6 +206,8 @@ class RvInstanceCrossCorrelation(object):
             The type of function to use to interpolate the CCF to measure sub-pixel RVs.
         :param interpolation_pixels:
             The number of pixels around the peak of the CCF to use when interpolating to measure sub-pixel RVs.
+        :param limit_to_best:
+            Use the results from only the N best fitting templates.
         :return:
             List of [RV value, weight]
         """
@@ -293,6 +295,14 @@ class RvInstanceCrossCorrelation(object):
             rv_fits.append(
                 (velocity, weight, (teff, logg, fe_h))
             )
+
+        # Sort the RV fits in order of how well the templates fit
+        rv_fits.sort(key=itemgetter(1))
+        rv_fits.reverse()
+
+        # If we're only using the few best-fitting templates, select them now
+        if limit_to_best is not None:
+            rv_fits = rv_fits[:limit_to_best]
 
         return rv_fits
 
