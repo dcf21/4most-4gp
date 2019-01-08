@@ -117,10 +117,10 @@ class RvInstanceCrossCorrelation(object):
                 # Multiply template by window function
                 template_spectrum.values *= self.window_functions[arm_name]
 
-                template_sum = np.sum(template_spectrum.values)
-
-                # Renormalise template
-                template_spectrum.values *= 1. / template_sum
+                # Ensure correct normalisation to return the Pearson correlation coefficient
+                # This is a zero-normalised cross-correlation (ZNCC)
+                template_spectrum.values = template_spectrum.values - np.mean(template_spectrum.values)
+                template_spectrum.values = template_spectrum.values / np.std(template_spectrum.values)
 
                 # Add modified template to list of updated templates for this arm
                 new_template_list.append(template_spectrum)
@@ -230,6 +230,11 @@ class RvInstanceCrossCorrelation(object):
             fe_h = template_metadata['[Fe/H]']
 
             input_array = input_spectrum.values * self.window_functions[arm_name]
+
+            # Ensure correct normalisation to return the Pearson correlation coefficient
+            # This is a zero-normalised cross-correlation (ZNCC)
+            input_array = input_array - np.mean(input_array)
+            input_array = input_array / np.std(input_array)
 
             cross_correlation = np.correlate(a=template_spectrum.values,
                                              v=input_array,
