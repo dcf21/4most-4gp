@@ -189,7 +189,9 @@ class RvInstanceCrossCorrelation(object):
         return resampled_spectrum
 
     def estimate_rv_from_single_arm(self, input_spectrum, mode, arm_name, interpolation_scheme="quadratic",
-                                    interpolation_pixels=3, limit_to_best=16):
+                                    interpolation_pixels=3,
+                                    limit_to_best=30,
+                                    minimum_allowed_correlation_coefficient=0.7):
         """
         Estimate the RV of a spectrum on the basis of data from a single arm. We return a list of RV estimates from
         cross correlation with each of the template spectra, and the chi-squared mismatch of each template spectrum
@@ -208,6 +210,8 @@ class RvInstanceCrossCorrelation(object):
             The number of pixels around the peak of the CCF to use when interpolating to measure sub-pixel RVs.
         :param limit_to_best:
             Use the results from only the N best fitting templates.
+        :param minimum_allowed_correlation_coefficient:
+            Reject any templates which have correlation coefficients worse than this
         :return:
             List of [RV value, weight]
         """
@@ -244,7 +248,7 @@ class RvInstanceCrossCorrelation(object):
             try:
                 max_position = np.where(cross_correlation == max(cross_correlation))[0][0]
             except IndexError:
-                print("Warning: Cross-correlation failed")
+                print("Warning: Cross-correlation with {} failed".format(template_metadata['Starname']))
                 max_position = np.nan
 
             if np.isfinite(max_position):
@@ -295,11 +299,12 @@ class RvInstanceCrossCorrelation(object):
             # Convert multiplicative wavelength shift into a radial velocity
             c = 299792458.0
             velocity = -c * (pow(multiplicative_shift, 2) - 1) / (pow(multiplicative_shift, 2) + 1)
-            weight = max(cross_correlation)
+            weight = max(cross_correlation) / len(input_spectrum)  # This should be between -1 and 1
 
-            rv_fits.append(
-                (velocity, weight, (teff, logg, fe_h))
-            )
+            if weight > minimum_allowed_correlation_coefficient:
+                rv_fits.append(
+                    (velocity, weight, (teff, logg, fe_h))
+                )
 
         # Sort the RV fits in order of how well the templates fit
         rv_fits.sort(key=itemgetter(1))
@@ -308,6 +313,9 @@ class RvInstanceCrossCorrelation(object):
         # If we're only using the few best-fitting templates, select them now
         if limit_to_best is not None:
             rv_fits = rv_fits[:limit_to_best]
+
+        # for item in rv_fits:
+        #     print("{} {}".format(arm_name, item))
 
         return rv_fits
 
@@ -478,6 +486,11 @@ class RvInstanceCrossCorrelation(object):
                 interpolation_pixels=interpolation_pixels
             )
             rv_estimates.extend(new_rv_estimates)
+
+        if len(rv_estimates) == 0:
+            rv_estimates = [
+                (np.nan, np.nan, (np.nan, np.nan, np.nan))
+            ]
 
         # Sort all the RV estimates into order of weight, and extract the stellar parameters of the best fitting
         # template
