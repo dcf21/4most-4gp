@@ -1,32 +1,35 @@
 # -*- coding: utf-8 -*-
 
 """
-This provides a wrapper to Phillip Cargile's version of the Payne.
+This provides a wrapper to Yuan-Sen Ting's version of the Payne.
 
-The code for this Payne is edited from this repository: https://github.com/pacargile/ThePayne
+The code for this Payne is as sent by email from Yuan-Sen Ting, 22/01/2019
 
 """
 
-import numpy as np
-from multiprocessing import cpu_count
 import logging
-from astropy.table import Table
-import torch
+import os
+import pickle
+from multiprocessing import cpu_count
 
 import fourgp_speclib
-from fourgp_degrade import SpectrumResampler
+import numpy as np
+from astropy.table import Table
+
+from .ting_train_nn import train_nn
+from .ting_test_nn import test_nn
 
 logger = logging.getLogger(__name__)
 
 
-class PayneInstanceCargile(object):
+class PayneInstanceTing(object):
     """
     A class which holds an instance of the Payne, and provides convenience methods for training it on arrays of spectra
     loaded from 4GP SpectrumLibrary objects.
     """
 
-    def __init__(self, training_set, label_names, wavelength_arms=None,
-                 censors=None,
+    def __init__(self, training_set, label_names,
+                 censors=None, threads=None,
                  load_from_file=None, debugging=False):
         """
         Instantiate the Payne and train it on the spectra contained within a SpectrumArray.
@@ -37,10 +40,6 @@ class PayneInstanceCargile(object):
         :param label_names:
             A list of the names of the labels the Payne is to estimate. We require that all of the training spectra
             have metadata fields defining all of these labels.
-
-        :param wavelength_arms:
-            A list of the wavelength break-points between arms which should have continuum fitted separately. For
-            compatibility we accept this argument, but it is not used for continuum-normalised spectra.
 
         :param load_from_file:
             The filename of the internal state of a pre-trained Payne, which we should load rather than doing
@@ -55,9 +54,8 @@ class PayneInstanceCargile(object):
 
         self._debugging_output_counter = 0
         self._debugging = debugging
-        self.payne_version = "Cargile"
-        self._wavelength_arms = wavelength_arms
-        logger.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
+        self.payne_version = "Ting"
+        self._label_names = label_names
 
         assert isinstance(training_set, fourgp_speclib.SpectrumArray), \
             "Training set for the Payne should be a SpectrumArray."
@@ -66,6 +64,11 @@ class PayneInstanceCargile(object):
         training_set = self.normalise(training_set)
 
         self._training_set = training_set
+
+        # Work out how many CPUs we should allow the Cannon to use
+        if threads is None:
+            threads = cpu_count()
+        self.threads = threads
 
         # Turn error bars on fluxes into inverse variances
         inverse_variances = training_set.value_errors ** (-2)
@@ -91,36 +94,20 @@ class PayneInstanceCargile(object):
                                       rows=[[training_set.get_metadata(index)[label] for label in label_names]
                                             for index in range(len(training_set))])
 
-        self._model = tc.L1RegularizedCannonModel(labelled_set=training_label_values,
-                                                  normalized_flux=training_set.values,
-                                                  normalized_ivar=inverse_variances,
-                                                  dispersion=training_set.wavelengths,
-                                                  threads=threads)
-
-        self._model.vectorizer = tc.vectorizer.NormalizedPolynomialVectorizer(
-            labelled_set=training_label_values,
-            terms=tc.vectorizer.polynomial.terminator(label_names, polynomial_order)
-        )
-
-        if censors is not None:
-            self._model.censors = censors
-
-        self._model.s2 = 0
-        self._model.regularization = 0
-
         if load_from_file is None:
             logger.info("Starting to train the Payne")
-            self._model.train(
-                progressbar=self._progress_bar,
-                op_kwargs={'xtol': tolerance, 'ftol': tolerance},
-                op_bfgs_kwargs={}
+            self._payne_status = train_nn(
+                threads=threads,
+                labelled_set=training_label_values,
+                normalized_flux=training_set.values,
+                normalized_ivar=inverse_variances,
+                dispersion=training_set.wavelengths
             )
             logger.info("Payne training completed")
         else:
             logger.info("Loading Payne from disk")
-            self._model.load(filename=load_from_file)
+            self._payne_status = pickle.load(open(load_from_file, 'rb'))
             logger.info("Payne loaded successfully")
-        self._model._set_s2_by_hogg_heuristic()
 
     def fit_spectrum(self, spectrum):
         """
@@ -151,13 +138,15 @@ class PayneInstanceCargile(object):
         inverse_variances[bad] = 0
         spectrum.values[bad] = np.nan
 
-        labels, cov, meta = self._model.fit(
-            normalized_flux=spectrum.values,
-            normalized_ivar=inverse_variances,
-            progressbar=False,
-            full_output=True)
+        fit_data = test_nn(
+            payne_status=self._payne_status,
+            threads=self.threads,
+            num_labels=len(self._label_names),
+            test_spectra=spectrum.values,
+            test_spectra_errors=inverse_variances,
+        )
 
-        return labels, cov, meta
+        return fit_data
 
     def normalise(self, spectrum):
         """
@@ -190,9 +179,12 @@ class PayneInstanceCargile(object):
         :return:
             None
         """
-        self._model.save(filename=filename,
-                         include_training_data=False,
-                         overwrite=overwrite)
+
+        if not overwrite:
+            assert not os.path.exists(filename), "Cannot save Payne because file already exists."
+
+        with open(filename, "wb") as f:
+            pickle.dump(self._payne_status, f)
 
     def __str__(self):
         return "<{module}.{name} instance".format(module=self.__module__,
@@ -201,4 +193,3 @@ class PayneInstanceCargile(object):
     def __repr__(self):
         return "<{0}.{1} object at {2}>".format(self.__module__,
                                                 type(self).__name__, hex(id(self)))
-
