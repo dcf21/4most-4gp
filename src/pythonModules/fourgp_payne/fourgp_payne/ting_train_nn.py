@@ -1,17 +1,22 @@
 # -*- coding: utf-8 -*-
 
-from multiprocessing import Pool
+# from multiprocessing import Pool
+
+import logging
 
 # import mkl
 import numpy as np
-import logging
 import torch
 from torch.autograd import Variable
 
-# This is a bit of a fudge, but prevents pytorch from failing with...
+
+# This is a bit of a fudge, but under Linux this prevents pytorch from failing with...
 # OSError: [Errno 24] Too many open files: '/tmp/pymp-kucaes4t' 
+
 # import torch.multiprocessing
 # torch.multiprocessing.set_sharing_strategy('file_system')
+
+# ... alternatively, you can just not use multiprocessing.Pool
 
 def train_pixel(params):
     pixel_no = params[0]
@@ -22,7 +27,7 @@ def train_pixel(params):
     y_valid_row = params[5]
 
     # define neural network
-    neuron_count = 1
+    neuron_count = 2
 
     model = torch.nn.Sequential(
         torch.nn.Linear(dim_in, neuron_count),
@@ -83,7 +88,36 @@ def train_pixel(params):
     # =============================================================================
 
 
-def train_nn(threads, labelled_set, normalized_flux, normalized_ivar, dispersion):
+def train_nn(batch_number, batch_count, labelled_set, normalized_flux, normalized_ivar, dispersion):
+    """
+    Train the neural network
+
+    :param batch_number:
+        If training pixels in multiple batches on different machines, then this is the number of the batch of pixels
+        we are to train. It should be in the range 0 .. batch_count-1 inclusive.
+
+    :param batch_count:
+        If training pixels in multiple batches on different machines, then this is the number of batches.
+
+    :param labelled_set:
+        2D numpy array containing the label values for the training set.
+        labelled_set[spectrum_num][label_num] = label_value
+
+    :param normalized_flux:
+        2D numpy array containing the continuum-normalised fluxes for the training stars.
+        normalized_flux[spectrum_num][pixel_num] = flux
+
+    :param normalized_ivar:
+        2D numpy array containing the uncertainty in the normalized_flux.
+        normalized_ivar[spectrum_num][pixel_num] = uncertainty
+
+    :param dispersion:
+        1D numpy array containing the wavelength (in Angstrom) associated with each pixel.
+
+    :return:
+        The optimized neural network weights.
+        output['w_array_0'][pixel_number] = list of w0 weights for that pixel
+    """
     logger = logging.getLogger(__name__)
 
     # set number of threads per CPU
@@ -91,7 +125,7 @@ def train_nn(threads, labelled_set, normalized_flux, normalized_ivar, dispersion
 
     # ------------------------------------------------------------------------------
     # number of CPUs for parallel computing
-    num_CPU = threads
+    # num_CPU = threads
 
     # ==============================================================================
     # restore training spectra
@@ -128,9 +162,15 @@ def train_nn(threads, labelled_set, normalized_flux, normalized_ivar, dispersion
     # net_array = pool.map(train_pixel, [[i, dim_in, x, x_valid, y[:, i], y_valid[:, i]]
     #                                    for i in range(num_pix)])
 
-    for i in range(num_pix):
+    net_array = []
+
+    # Work out which batch of pixels we are to work on
+    pixel_start = (num_pix // batch_count + 1) * batch_number
+    pixel_end   = min(num_pix, (num_pix // batch_count + 1) * (batch_number + 1))
+
+    for i in range(pixel_start, pixel_end):
         logger.info("Training pixel {:6d}/{:6d}".format(i, num_pix))
-        train_pixel([i, dim_in, x, x_valid, y[:, i], y_valid[:, i]])
+        net_array.append(train_pixel([i, dim_in, x, x_valid, y[:, i], y_valid[:, i]]))
 
     # extract parameters
     w_array_0 = np.array([net_array[i][0] for i in range(len(net_array))])
