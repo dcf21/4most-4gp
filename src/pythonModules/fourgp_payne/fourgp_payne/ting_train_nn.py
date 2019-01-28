@@ -38,7 +38,7 @@ def train_pixel(params):
     )
 
     # define optimizer
-    learning_rate = 0.001
+    learning_rate = 0.1  # Yuan-Sen set this to 0.001. Doctored by dcf for speed.
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # ==============================================================================
@@ -49,7 +49,7 @@ def train_pixel(params):
 
     # -----------------------------------------------------------------------------
     # train the neural network
-    while count < 10:
+    while count < 2:  # Yuan-Sen set this to 20
 
         # training
         y_pred = model(x)[:, 0]
@@ -62,7 +62,9 @@ def train_pixel(params):
 
         # -----------------------------------------------------------------------------
         # check convergence
-        if t % 1000 == 0:
+
+        # Set number of iterations of optimizer to run between checking progress. Yuan-Sen set to 10,000
+        if t % 10 == 0:
             if loss_valid >= current_loss:
                 count += 1
             else:
@@ -166,7 +168,7 @@ def train_nn(batch_number, batch_count, labelled_set, normalized_flux, normalize
 
     # Work out which batch of pixels we are to work on
     pixel_start = (num_pix // batch_count + 1) * batch_number
-    pixel_end   = min(num_pix, (num_pix // batch_count + 1) * (batch_number + 1))
+    pixel_end = min(num_pix, (num_pix // batch_count + 1) * (batch_number + 1))
 
     for i in range(pixel_start, pixel_end):
         logger.info("Training pixel {:6d}/{:6d}".format(i, num_pix))

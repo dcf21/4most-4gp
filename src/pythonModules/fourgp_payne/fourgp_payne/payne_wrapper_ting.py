@@ -93,11 +93,11 @@ class PayneInstanceTing(object):
             metadata = training_set.get_metadata(index)
             for label in label_names:
                 assert label in metadata, "Label <{}> not set on training spectrum number {}. " \
-                                          "Labels on this spectrum are: {}.".format(
-                    label, index, ", ".join(list(metadata.keys())))
+                                          "Labels on this spectrum are: {}.".\
+                    format(label, index, ", ".join(list(metadata.keys())))
                 assert np.isfinite(metadata[label]), "Label <{}> is not finite on training spectrum number {}. " \
-                                                     "Labels on this spectrum are: {}.".format(
-                    label, index, metadata)
+                                                     "Labels on this spectrum are: {}.".\
+                    format(label, index, metadata)
 
         # Compile table of training values of labels from metadata contained in SpectrumArray
         training_label_values = np.array([[training_set.get_metadata(index)[label] for label in label_names]
@@ -128,7 +128,7 @@ class PayneInstanceTing(object):
 
         # Reload training data from all batches in preparation for testing
         logger.info("Loading Payne from disk")
-        self._payne_status = []
+        payne_batches = []
         for i in range(batch_count):
             batch_pickle_filename = os.path.join(training_data_archive,
                                                  "batch_{:04d}_of_{:04d}.pkl".format(i, batch_count))
@@ -137,8 +137,17 @@ class PayneInstanceTing(object):
                                                           "training data for batch {:d} of pixels is not present " \
                                                           "on this server.".format(i)
 
-            self._payne_status.append(pickle.load(open(batch_pickle_filename, 'rb')))
+            payne_batches.append(pickle.load(open(batch_pickle_filename, 'rb')))
         logger.info("Payne loaded successfully")
+
+        self._payne_status = {}
+        for keyword in payne_batches[0]:
+            self._payne_status[keyword] = np.concatenate(
+                [payne_batches[i][keyword] for i in range(len(payne_batches))]
+            )
+        del payne_batches  # Free up memory
+
+        logger.info("Payne batches merged successfully")
 
     def fit_spectrum(self, spectrum):
         """
