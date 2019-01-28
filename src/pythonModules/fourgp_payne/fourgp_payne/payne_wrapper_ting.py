@@ -14,7 +14,6 @@ from multiprocessing import cpu_count
 
 import fourgp_speclib
 import numpy as np
-from astropy.table import Table
 
 from .ting_train_nn import train_nn
 from .ting_test_nn import test_nn
@@ -90,9 +89,8 @@ class PayneInstanceTing(object):
                     label, index, metadata)
 
         # Compile table of training values of labels from metadata contained in SpectrumArray
-        training_label_values = Table(names=label_names,
-                                      rows=[[training_set.get_metadata(index)[label] for label in label_names]
-                                            for index in range(len(training_set))])
+        training_label_values = np.array([[training_set.get_metadata(index)[label] for label in label_names]
+                                           for index in range(len(training_set))])
 
         if load_from_file is None:
             logger.info("Starting to train the Payne")
