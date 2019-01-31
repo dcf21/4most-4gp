@@ -107,6 +107,7 @@ class PayneInstanceTing(object):
         if batch_number >= 0:
             logger.info("Starting to train the Payne")
             training_data_batch = train_nn(
+                threads=threads,
                 batch_number=batch_number,
                 batch_count=batch_count,
                 labelled_set=training_label_values,

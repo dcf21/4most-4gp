@@ -95,14 +95,16 @@ def test_nn(payne_status, threads, num_labels, test_spectra, test_spectra_errors
     # fit spectra
     params = [num_labels, Y_u_all, Y_u_all_err, w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2]
 
-    # pool = Pool(num_CPU)
-    # recovered_results = np.array(pool.map(fit_spectrum,
-    #                                       [[i]+params for i in range(Y_u_all.shape[1])])).T
+    # Fitting in parallel
+    with Pool(num_CPU) as pool:
+        recovered_results = np.array(pool.map(fit_spectrum,
+                                              [[i]+params for i in range(Y_u_all.shape[1])])).T
 
-    recovered_results = []
-    for i in range(Y_u_all.shape[1]):
-        recovered_results.append(fit_spectrum([i]+params))
-    recovered_results = np.array(recovered_results).T
+    # Fitting in serial
+    # recovered_results = []
+    # for i in range(Y_u_all.shape[1]):
+    #     recovered_results.append(fit_spectrum([i]+params))
+    # recovered_results = np.array(recovered_results).T
 
     # -------------------------------------------------------------------------------
     # initiate chi^2
