@@ -30,7 +30,7 @@ def train_pixel(params):
     )
 
     # define optimizer
-    learning_rate = 0.02  # Yuan-Sen set this to 0.001. Doctored by dcf for speed.
+    learning_rate = 0.01  # Yuan-Sen set this to 0.001. Doctored by dcf for speed.
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # ==============================================================================
@@ -56,10 +56,11 @@ def train_pixel(params):
         # check convergence
 
         # Set number of iterations of optimizer to run between checking progress. Yuan-Sen set to 10,000
-        if t % 100 == 0:
+        if t % 400 == 0:
             if loss_valid >= current_loss:
                 count += 1
             else:
+                count = 0
                 # record the best loss
                 current_loss = loss_valid
 
