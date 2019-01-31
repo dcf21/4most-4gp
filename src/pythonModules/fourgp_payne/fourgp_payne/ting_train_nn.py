@@ -27,7 +27,7 @@ def train_pixel(params):
     y_valid_row = params[5]
 
     # define neural network
-    neuron_count = 2
+    neuron_count = 3
 
     model = torch.nn.Sequential(
         torch.nn.Linear(dim_in, neuron_count),
@@ -38,7 +38,7 @@ def train_pixel(params):
     )
 
     # define optimizer
-    learning_rate = 0.1  # Yuan-Sen set this to 0.001. Doctored by dcf for speed.
+    learning_rate = 0.02  # Yuan-Sen set this to 0.001. Doctored by dcf for speed.
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # ==============================================================================
@@ -49,7 +49,7 @@ def train_pixel(params):
 
     # -----------------------------------------------------------------------------
     # train the neural network
-    while count < 2:  # Yuan-Sen set this to 20
+    while count < 5:  # Yuan-Sen set this to 20
 
         # training
         y_pred = model(x)[:, 0]
@@ -64,7 +64,7 @@ def train_pixel(params):
         # check convergence
 
         # Set number of iterations of optimizer to run between checking progress. Yuan-Sen set to 10,000
-        if t % 10 == 0:
+        if t % 100 == 0:
             if loss_valid >= current_loss:
                 count += 1
             else:

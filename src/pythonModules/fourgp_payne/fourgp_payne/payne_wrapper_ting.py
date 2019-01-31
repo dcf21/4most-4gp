@@ -182,8 +182,8 @@ class PayneInstanceTing(object):
             payne_status=self._payne_status,
             threads=self.threads,
             num_labels=len(self._label_names),
-            test_spectra=spectrum.values,
-            test_spectra_errors=inverse_variances,
+            test_spectra=np.array([spectrum.values]),  # We are testing spectra one at a time, but wrapper allowing parallel testing
+            test_spectra_errors=np.array([inverse_variances]),
         )
 
         return fit_data
