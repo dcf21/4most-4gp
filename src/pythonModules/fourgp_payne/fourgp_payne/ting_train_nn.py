@@ -3,11 +3,13 @@
 import logging
 from multiprocessing import Pool
 import numpy as np
+import time
 import torch
 from torch.autograd import Variable
 
 
 def train_pixel(params):
+    time_start = time.time()
     pixel_no = params[0]
     dim_in = params[1]
     x = params[2]
@@ -15,8 +17,7 @@ def train_pixel(params):
     y_row = params[4]
     y_valid_row = params[5]
 
-    logger = logging.getLogger(__name__)
-    logger.info("Training pixel {:6d}".format(pixel_no))
+    # logging.info("Training pixel {:6d}".format(pixel_no))
 
     # define neural network
     neuron_count = 3
@@ -41,26 +42,28 @@ def train_pixel(params):
 
     # -----------------------------------------------------------------------------
     # train the neural network
-    while count < 5:  # Yuan-Sen set this to 20
+    while count < 10:  # Yuan-Sen set this to 20
+
+        # -----------------------------------------------------------------------------
+        # check convergence
 
         # training
         y_pred = model(x)[:, 0]
         loss = ((y_pred - y_row).pow(2) / (0.01 ** 2)).mean()
 
-        # validation
-        y_pred_valid = model(x_valid)[:, 0]
-        loss_valid = (((y_pred_valid - y_valid_row).pow(2)
-                       / (0.01 ** 2)).mean()).item()
-
-        # -----------------------------------------------------------------------------
-        # check convergence
-
         # Set number of iterations of optimizer to run between checking progress. Yuan-Sen set to 10,000
-        if t % 400 == 0:
+        if t % 5000 == 0:
+
+            # validation
+            y_pred_valid = model(x_valid)[:, 0]
+            loss_valid = (((y_pred_valid - y_valid_row).pow(2)
+                           / (0.01 ** 2)).mean()).item()
+
             if loss_valid >= current_loss:
                 count += 1
             else:
-                count = 0
+                # count = 0
+
                 # record the best loss
                 current_loss = loss_valid
 
@@ -78,6 +81,9 @@ def train_pixel(params):
 
     # -----------------------------------------------------------------------------
     # return parameters
+    time_end = time.time()
+    logging.info("Pixel {:6d} trained in {:9d} steps and {:.1f} seconds".format(pixel_no, t, time_end - time_start))
+
     return model_numpy
 
     # =============================================================================

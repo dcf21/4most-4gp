@@ -18,8 +18,6 @@ import numpy as np
 from .ting_train_nn import train_nn
 from .ting_test_nn import test_nn
 
-logger = logging.getLogger(__name__)
-
 
 class PayneInstanceTing(object):
     """
@@ -105,7 +103,7 @@ class PayneInstanceTing(object):
 
         # If we need to train a batch of pixels, do that now
         if batch_number >= 0:
-            logger.info("Starting to train the Payne")
+            logging.info("Starting to train the Payne")
             training_data_batch = train_nn(
                 threads=threads,
                 batch_number=batch_number,
@@ -117,18 +115,18 @@ class PayneInstanceTing(object):
             )
 
             # Save weights of neural network
-            logger.info("Payne training completed")
+            logging.info("Payne training completed")
             os.system("mkdir -p {}".format(training_data_archive))
 
-            logger.info("Saving Payne to disk")
+            logging.info("Saving Payne to disk")
             batch_pickle_filename = os.path.join(training_data_archive,
                                                  "batch_{:04d}_of_{:04d}.pkl".format(batch_number, batch_count))
             with open(batch_pickle_filename, "wb") as f:
                 pickle.dump(training_data_batch, f)
-            logger.info("Saving completed")
+            logging.info("Saving completed")
 
         # Reload training data from all batches in preparation for testing
-        logger.info("Loading Payne from disk")
+        logging.info("Loading Payne from disk")
         payne_batches = []
         for i in range(batch_count):
             batch_pickle_filename = os.path.join(training_data_archive,
@@ -139,7 +137,7 @@ class PayneInstanceTing(object):
                                                           "on this server.".format(i)
 
             payne_batches.append(pickle.load(open(batch_pickle_filename, 'rb')))
-        logger.info("Payne loaded successfully")
+        logging.info("Payne loaded successfully")
 
         self._payne_status = {}
         for keyword in payne_batches[0]:
@@ -148,7 +146,7 @@ class PayneInstanceTing(object):
             )
         del payne_batches  # Free up memory
 
-        logger.info("Payne batches merged successfully")
+        logging.info("Payne batches merged successfully")
 
     def fit_spectrum(self, spectrum):
         """

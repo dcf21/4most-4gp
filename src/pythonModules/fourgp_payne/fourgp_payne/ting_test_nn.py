@@ -18,7 +18,6 @@ def sigmoid_def(z):
 # define function to perform testing step in batch
 def fit_spectrum(params):
     spec_no, num_labels, Y_u_all, Y_u_all_err, w_array_0, w_array_1, w_array_2, b_array_0, b_array_1, b_array_2 = params
-    logger = logging.getLogger(__name__)
 
     # Deal with pixels which are nan
     spectrum = Y_u_all[:, spec_no]
@@ -55,7 +54,7 @@ def fit_spectrum(params):
                                sigma=spectrum_errors,
                                absolute_sigma=True, bounds=bounds.T)
     except RuntimeError:
-        logger.info("!!! Fitting failed")
+        logging.info("!!! Fitting failed")
         popt = np.zeros(num_labels) - 9999.
 
     return popt
