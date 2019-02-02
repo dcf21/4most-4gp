@@ -30,7 +30,7 @@ def train_pixel(params):
     )
 
     # define optimizer
-    learning_rate = 0.01  # Yuan-Sen set this to 0.001. Doctored by dcf for speed.
+    learning_rate = 0.001  # Yuan-Sen set this to 0.001. Doctored by dcf for speed.
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # ==============================================================================
