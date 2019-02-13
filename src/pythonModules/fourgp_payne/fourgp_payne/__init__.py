@@ -5,7 +5,7 @@ import logging
 from numpy import RankWarning
 from warnings import simplefilter
 
-__version__ = "20190201.1"
+__version__ = "20190301.1"
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # TODO: Remove this when stable.

@@ -13,7 +13,7 @@ from .redden import SpectrumReddener
 from .snr_conversion import SNRConverter, SNRValue
 from .spectrum_properties import SpectrumProperties
 
-__version__ = "20190201.1"
+__version__ = "20190301.1"
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # TODO: Remove this when stable.
