@@ -18,10 +18,19 @@ class PipelineManager:
     pipeline, and posts results back to some destination.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, pipeline):
+        """
+        Class which fetches work to do, processes spectra through a pipeline, and posts results back to some
+        destination.
+
+        :param pipeline:
+            The Pipeline we are to run spectra through.
+        :type pipeline:
+            Pipeline
+        """
 
         # Instantiate the pipeline that we're going to use to analyse spectra
-        self.pipeline = Pipeline(**kwargs)
+        self.pipeline = pipeline
 
     def fetch_work(self):
         """
@@ -75,14 +84,18 @@ class PipelineManager:
         """
 
         # Query whether we have any work to do
-        job = self.fetch_work()
+        job_description = self.fetch_work()
+
+        input_spectrum = job_description['spectrum']
+        spectrum_identifier = job_description['spectrum_identifier']
 
         # If we have no work to do, exit immediately
         if job is None:
             return 0
 
         # If we got a spectrum, analyse it now
-        analysis = self.pipeline.analyse_spectrum(input_spectrum=job)
+        analysis = self.pipeline.analyse_spectrum(input_spectrum=input_spectrum,
+                                                  spectrum_identifier=spectrum_identifier)
 
         # Post results back
         self.post_result(spectrum_analysis=analysis)

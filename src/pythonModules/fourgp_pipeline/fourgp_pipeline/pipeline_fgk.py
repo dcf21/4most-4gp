@@ -7,18 +7,34 @@ determining RVs, or continuum normalising spectra.
 
 """
 
+import gzip
+import json
+
+import numpy as np
+from fourgp_cannon.cannon_wrapper_casey_old import CannonInstanceCaseyOld
 from fourgp_rv import RvInstanceCrossCorrelation
 
 from .dummy_processes import ContinuumNormalisationDummy, DecisionMakerDummy
-from .pipeline import Pipeline, PipelineTask
+from .pipeline import Pipeline, PipelineTask, PipelineFailure
 
 
 class TaskContinuumNormalisationFirstPass(PipelineTask):
+    """
+    First-pass continuum normalisation, done before RV correction.
+    """
+
     @staticmethod
     def task_name():
+        """
+        :return:
+            Name for this pipeline task.
+        """
         return "continuum_normalise_pass_1"
 
     def __init__(self):
+        """
+        Instantiate the dummy continuum normalisation code.
+        """
         super(TaskContinuumNormalisationFirstPass, self).__init__()
         self.normaliser = ContinuumNormalisationDummy()
 
@@ -38,21 +54,42 @@ class TaskContinuumNormalisationFirstPass(PipelineTask):
             The continuum-normalised spectrum.
         """
 
-        return self.normaliser.continuum_normalise(
-            spectrum_flux_normalised=input_spectrum,
-            spectrum_analysis=spectrum_analysis
-        )
+        return {
+            'spectrum': self.normaliser.continuum_normalise(
+                spectrum_flux_normalised=input_spectrum,
+                spectrum_analysis=spectrum_analysis
+            ),
+            'metadata': {}
+        }
 
 
 class TaskRVCorrect(PipelineTask):
+    """
+    Estimate the radial velocity of a star by the cross correlation method.
+    """
+
     @staticmethod
     def task_name():
+        """
+        :return:
+            Name for this pipeline task.
+        """
         return "rv_correct"
 
     def __init__(self,
+                 fourmost_mode,
                  rv_cross_correlation_library="rv_templates_resampled",
                  rv_upsampling=1):
+        """
+        Initialise the cross-correlation RV code.
+
+        :param rv_cross_correlation_library:
+            The name of the spectrum library we are to get our cross correlation templates from.
+        :param rv_upsampling:
+            The upsampling factor to apply to input spectra before cross correlating them with the templates.
+        """
         super(TaskRVCorrect, self).__init__()
+        self.fourmost_mode = fourmost_mode
         self.rv_code = RvInstanceCrossCorrelation(spectrum_library=rv_cross_correlation_library,
                                                   upsampling=rv_upsampling)
 
@@ -72,16 +109,40 @@ class TaskRVCorrect(PipelineTask):
             The RV-corrected spectrum.
         """
 
-        return self.rv_code.estimate_rv(input_spectrum=input_spectrum,
-                                        mode=spectrum_analysis.fourmost_mode)
+        rv_mean, rv_std_dev, stellar_parameters, rv_estimates_by_weight = self.rv_code.estimate_rv(
+            input_spectrum=input_spectrum,
+            mode=self.fourmost_mode
+        )
+
+        return {
+            'spectrum': input_spectrum.apply_rv(rv=rv_mean),
+            'metadata': {
+                'rv': rv_mean,
+                'rv_uncertainty': rv_std_dev,
+                'stellar_parameter': stellar_parameters,
+                'rv_estimates_by_weight': rv_estimates_by_weight
+            }
+        }
 
 
 class TaskContinuumNormalisationSecondPass(PipelineTask):
+    """
+    Second-pass continuum normalisation, done after the RV of the spectrum has been estimated, and this radial
+    velocity has been estimated.
+    """
+
     @staticmethod
     def task_name():
+        """
+        :return:
+            Name for this pipeline task.
+        """
         return "continuum_normalise_pass_2"
 
     def __init__(self):
+        """
+        Instantiate the dummy continuum normalisation code.
+        """
         super(TaskContinuumNormalisationSecondPass, self).__init__()
         self.normaliser = ContinuumNormalisationDummy()
 
@@ -101,20 +162,61 @@ class TaskContinuumNormalisationSecondPass(PipelineTask):
             The continuum-normalised spectrum.
         """
 
-        return self.normaliser.continuum_normalise(
-            spectrum_flux_normalised=input_spectrum,
-            spectrum_analysis=spectrum_analysis
-        )
+        return {
+            'spectrum': self.normaliser.continuum_normalise(
+                spectrum_flux_normalised=input_spectrum,
+                spectrum_analysis=spectrum_analysis
+            ),
+            'metadata': {}
+        }
 
 
 class TaskCannonAbundanceAnalysis(PipelineTask):
+    """
+    Run the spectrum through the Cannon to estimate stellar parameters and abundances.
+    """
+
     @staticmethod
     def task_name():
+        """
+        :return:
+            Name for this pipeline task.
+        """
         return "cannon_abundance_analysis"
 
-    def __init__(self):
+    def __init__(self, reload_cannon_from_file):
+        """
+        Instantiate a Cannon, and load training data from disk.
+        """
+
         super(TaskCannonAbundanceAnalysis, self).__init__()
-        self.normaliser = ContinuumNormalisationDummy()
+
+        # Load the JSON data that summarises the Cannon training that we're about to reload
+        # We need the JSON data as well as the pickle that Andy Casey's code saves, as this contains information
+        # such as the censoring masks which we need to reproduce. It also makes this code immune to the detail that Andy
+        # Casey's various versions of the Cannon save their training data in incompatible formats.
+        json_summary_filename = "{}.summary.json.gz".format(reload_cannon_from_file)
+
+        with gzip.open(json_summary_filename, "rt") as f:
+            summary_json = json.loads(f.read())
+
+        training_spectrum_library = summary_json['training_time']
+        label_names = summary_json['labels']
+        censoring_masks = summary_json['censoring_mask']
+
+        # JSON serialisation turns censoring masks from numpy arrays into tuples. Turn them back into numpy
+        # arrays before passing to the Cannon
+        if censoring_masks is None:
+            censoring_masks_numpy = None
+        else:
+            censoring_masks_numpy = dict([(label, np.array(mask))
+                                          for label, mask in censoring_masks.items()])
+
+        # Instantiate the wrapper to the Cannon
+        self.cannon = CannonInstanceCaseyOld(training_set=training_spectrum_library,
+                                             label_names=label_names,
+                                             censors=censoring_masks_numpy
+                                             )
 
     def task_implementation(self, input_spectrum, spectrum_analysis):
         """
@@ -132,15 +234,35 @@ class TaskCannonAbundanceAnalysis(PipelineTask):
             The continuum-normalised spectrum.
         """
 
-        return self.normaliser.continuum_normalise(
-            spectrum_flux_normalised=input_spectrum,
-            spectrum_analysis=spectrum_analysis
-        )
+        # Pass spectrum to the Cannon
+        labels, cov, meta = self.cannon.fit_spectrum(spectrum=input_spectrum)
+
+        # Check whether Cannon failed
+        if labels is None:
+            raise PipelineFailure("The Cannon failed to fit this spectrum.")
+
+        # Return results
+        return {
+            'spectrum': input_spectrum,
+            'metadata': {
+                'label_values': labels,
+                'covariance_matrix': cov,
+                'metadata': meta
+            }
+        }
 
 
 class TaskDecisionMaker(PipelineTask):
+    """
+    Inspect the results of this run of the pipeline, and decide whether the run was a success or a failure.
+    """
+
     @staticmethod
     def task_name():
+        """
+        :return:
+            Name for this pipeline task.
+        """
         return "decision_maker"
 
     def __init__(self):
@@ -163,7 +285,14 @@ class TaskDecisionMaker(PipelineTask):
             The continuum-normalised spectrum.
         """
 
-        return self.oracle.consult(spectrum_analysis=spectrum_analysis)
+        success = self.oracle.consult(spectrum_analysis=spectrum_analysis)
+
+        return {
+            'spectrum': input_spectrum,
+            'metadata': {
+                'success': success
+            }
+        }
 
 
 class PipelineFGK(Pipeline):
@@ -171,7 +300,19 @@ class PipelineFGK(Pipeline):
     Pipeline for FGK stars.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, fourmost_mode, reload_cannon_from_file):
+        """
+        Pipeline for processing spectra of FGK stars, for either 4MOST HRS or LRS.
+        :param fourmost_mode:
+            String containing either "hrs" or "lrs" indicating which 4MOST mode we are analysing.
+        :type fourmost_mode:
+            str
+        """
+
+        # Check that 4MOST mode is valid
+        assert fourmost_mode in ("hrs", "lrs"), \
+            "4MOST mode <{}> is not recognised.".format(fourmost_mode)
+
         # Initialise an empty pipeline
         super(PipelineFGK, self).__init__()
 
@@ -180,13 +321,17 @@ class PipelineFGK(Pipeline):
                          task_implementation=TaskContinuumNormalisationFirstPass()
                          )
         self.append_task(task_name="rv_correct",
-                         task_implementation=TaskRVCorrect(),
+                         task_implementation=TaskRVCorrect(
+                             fourmost_mode=fourmost_mode
+                         )
                          )
         self.append_task(task_name="continuum_normalise_pass_2",
                          task_implementation=TaskContinuumNormalisationSecondPass()
                          )
         self.append_task(task_name="cannon_abundance_analysis",
-                         task_implementation=TaskCannonAbundanceAnalysis()
+                         task_implementation=TaskCannonAbundanceAnalysis(
+                             reload_cannon_from_file=reload_cannon_from_file
+                         )
                          )
         self.append_task(task_name="decision_maker",
                          task_implementation=TaskDecisionMaker()
