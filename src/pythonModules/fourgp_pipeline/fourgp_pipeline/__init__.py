@@ -11,6 +11,7 @@ from warnings import simplefilter
 
 from .pipeline_manager import PipelineManager
 from .pipeline import Pipeline
+from .pipeline_fgk import PipelineFGK
 from .spectrum_analysis import SpectrumAnalysis
 
 __version__ = "20190301.1"
