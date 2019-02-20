@@ -52,10 +52,10 @@ fourgp\_speclib\.spectrum\_library\_sqlite module
     :undoc-members:
     :show-inheritance:
 
-fourgp\_speclib\.spectrum\_polynomial module
+fourgp\_speclib\.spectrum\_smooth module
 --------------------------------------------
 
-.. automodule:: fourgp_speclib.spectrum_polynomial
+.. automodule:: fourgp_speclib.spectrum_smooth
     :members:
     :undoc-members:
     :show-inheritance:

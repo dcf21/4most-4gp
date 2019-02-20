@@ -107,6 +107,7 @@ class PipelineTask:
     def task_name():
         """
         All pipeline tasks must have a defined name.
+
         :return:
             string name
         """

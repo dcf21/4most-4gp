@@ -420,7 +420,8 @@ class RvInstanceCrossCorrelation(object):
 
     def upsample_spectrum(self, input, upsampling_factor):
         """
-        Upsample a spectrum object using cubic spline interpolation
+        Upsample a spectrum object using cubic spline interpolation.
+
         :param input:
             The Spectrum object we should up sample
         :param upsampling_factor:

@@ -4,14 +4,29 @@ fourgp\_rv package
 Submodules
 ----------
 
-fourgp\_rv\.rv\_instance module
--------------------------------
+fourgp\_rv\.cross\_correlation module
+-------------------------------------
 
-.. automodule:: fourgp_rv.rv_instance
+.. automodule:: fourgp_rv.cross_correlation
     :members:
     :undoc-members:
     :show-inheritance:
 
+fourgp\_rv\.rv\_random module
+-----------------------------
+
+.. automodule:: fourgp_rv.rv_random
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+fourgp\_rv\.templates\_resample module
+--------------------------------------
+
+.. automodule:: fourgp_rv.templates_resample
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 Module contents
 ---------------

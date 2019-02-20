@@ -25,6 +25,7 @@ class SpectrumSmoothFactory:
 
     def __init__(self, function_family, wavelengths, terms=3, metadata=None):
         """
+        A class implementing a factory for smoothed spectra.
 
         :param function_family:
             A subclass of SpectrumSmooth, representing the family of functions (e.g. polynomials) to use to make a
@@ -233,6 +234,7 @@ class SpectrumSmooth(Spectrum):
 
     def __init__(self, wavelengths, terms=2, coefficients=None, metadata=None):
         """
+        A class implementing a smooth functional form for a spectrum, dependant on a number of coefficients.
 
         :param wavelengths:
             A 1D array listing the wavelengths at which this array of spectra are sampled.
@@ -343,6 +345,7 @@ class SpectrumSmooth(Spectrum):
     def _update_values_array(self):
         """
         Evaluate function at every point on wavelength raster.
+
         :return:
             None
         """
@@ -351,6 +354,7 @@ class SpectrumSmooth(Spectrum):
     def evaluate_function(self, raster, coefficients):
         """
         Evaluate function at every point on wavelength raster.
+
         :return:
             None
         """
@@ -365,6 +369,7 @@ class SpectrumPolynomial(SpectrumSmooth):
     def evaluate_function(self, raster, coefficients):
         """
         Evaluate polynomial at every point on wavelength raster.
+
         :return:
             None
         """
@@ -387,6 +392,7 @@ class SpectrumChebyshev(SpectrumSmooth):
     def evaluate_function(self, raster, coefficients):
         """
         Evaluate Chebyshev polynomial at every point on wavelength raster.
+
         :return:
             None
         """
@@ -413,6 +419,7 @@ class SpectrumSinesAndCosines(SpectrumSmooth):
     def evaluate_function(self, raster, coefficients):
         """
         Evaluate spectrum comprising sines and cosines at every point on wavelength raster.
+
         :return:
             None
         """

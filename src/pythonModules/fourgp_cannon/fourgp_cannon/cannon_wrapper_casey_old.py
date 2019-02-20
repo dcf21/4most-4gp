@@ -8,11 +8,16 @@ The code for this Cannon is in the master branch of this repository: https://git
 This is the version of the Cannon used in all technical reports issued by Dominic Ford.
 """
 
-import numpy as np
-from multiprocessing import cpu_count
 import logging
+from multiprocessing import cpu_count
+
+import numpy as np
 from astropy.table import Table
-import AnniesLasso as tc
+
+try:
+    import AnniesLasso as tc
+except ImportError:
+    print("!!! Warning! Could not find Andy Casey's old cannon in python environment.")
 
 import fourgp_speclib
 from fourgp_degrade import SpectrumResampler

@@ -9,14 +9,19 @@ In January 2018 we got poor results with this version of the Cannon, so did not 
 at that time.
 """
 
+import logging
 import os
 import sys
 from contextlib import contextmanager
-import numpy as np
 from multiprocessing import cpu_count
-import logging
+
+import numpy as np
 from astropy.table import Table
-import thecannon as tc
+
+try:
+    import thecannon as tc
+except ImportError:
+    print("!!! Warning! Could not find Andy Casey's new Cannon in python environment.")
 
 import fourgp_speclib
 from fourgp_degrade import SpectrumResampler
@@ -48,6 +53,8 @@ def suppress_stdout(allow_progressbar):
 
 class CannonInstanceCaseyNew(object):
     """
+    THIS CLASS IS CURRENTLY DEPRECATED (MARCH 2019). USE <CannonInstanceCaseyOld> FOR BEST RESULTS.
+
     A class which holds an instance of the Cannon, and provides convenience methods for training it on arrays of spectra
     loaded from 4GP SpectrumLibrary objects.
     """

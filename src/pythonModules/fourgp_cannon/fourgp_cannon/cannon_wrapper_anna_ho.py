@@ -8,11 +8,16 @@ The code for this Cannon is in the master branch of this repository: https://git
 This is a version of the Cannon that Dominic Ford began investigating in November 2018.
 """
 
-import numpy as np
 import logging
 import pickle
-import TheCannon.dataset as ho_dataset
-import TheCannon.model as ho_model
+
+import numpy as np
+
+try:
+    import TheCannon.dataset as ho_dataset
+    import TheCannon.model as ho_model
+except ImportError:
+    print("!!! Warning! Could not find Anna Ho's Cannon in python environment.")
 
 import fourgp_speclib
 
@@ -21,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 class CannonInstanceAnnaHo(object):
     """
+    THIS CLASS IS CURRENTLY DEPRECATED (MARCH 2019). USE <CannonInstanceCaseyOld> FOR BEST RESULTS.
+
     A class which holds an instance of the Cannon, and provides convenience methods for training it on arrays of spectra
     loaded from 4GP SpectrumLibrary objects.
     """

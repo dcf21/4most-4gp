@@ -27,7 +27,8 @@ class SNRValue:
 
     def per_pixel(self):
         """
-        Return the SNR per pixel
+        Return the SNR per pixel.
+
         :return:
             float
         """
@@ -35,7 +36,8 @@ class SNRValue:
 
     def per_a(self):
         """
-        Return the SNR per A
+        Return the SNR per A.
+
         :return:
             float
         """
@@ -44,12 +46,12 @@ class SNRValue:
 
 class SNRConverter:
     """
-    Class to convert SNRs between SNR/pixel and SNR/A
+    Class to convert SNRs between SNR/pixel and SNR/A.
     """
 
     def __init__(self, raster_from_file=None, raster=None, snr_at_wavelength=6100):
         """
-        Class to convert SNRs between SNR/pixel and SNR/A
+        Class to convert SNRs between SNR/pixel and SNR/A.
 
         :param raster_from_file:
             The filename of a file from which we should read the wavelength raster being used. Optional.

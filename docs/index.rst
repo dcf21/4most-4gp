@@ -13,10 +13,12 @@ Welcome to 4GP's documentation!
    api_cannon/modules.rst
    api_degrade/modules.rst
    api_fourfs/modules.rst
+   api_payne/modules.rst
+   api_pipeline/modules.rst
    api_rv/modules.rst
    api_speclib/modules.rst
    api_specsynth/modules.rst
-   api_telescopes/modules.rst
+   api_telescope_data/modules.rst
 
 
 
