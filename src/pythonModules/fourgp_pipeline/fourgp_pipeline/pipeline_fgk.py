@@ -9,10 +9,12 @@ determining RVs, or continuum normalising spectra.
 
 import gzip
 import json
+from os import path as os_path
 
 import numpy as np
 from fourgp_cannon.cannon_wrapper_casey_old import CannonInstanceCaseyOld
 from fourgp_rv import RvInstanceCrossCorrelation
+from fourgp_speclib import SpectrumLibrarySqlite
 
 from .dummy_processes import ContinuumNormalisationDummy, DecisionMakerDummy
 from .pipeline import Pipeline, PipelineTask, PipelineFailure
@@ -35,6 +37,7 @@ class TaskContinuumNormalisationFirstPass(PipelineTask):
         """
         Instantiate the dummy continuum normalisation code.
         """
+
         super(TaskContinuumNormalisationFirstPass, self).__init__()
         self.normaliser = ContinuumNormalisationDummy()
 
@@ -77,20 +80,41 @@ class TaskRVCorrect(PipelineTask):
         return "rv_correct"
 
     def __init__(self,
+                 workspace,
                  fourmost_mode,
                  rv_cross_correlation_library="rv_templates_resampled",
                  rv_upsampling=1):
         """
         Initialise the cross-correlation RV code.
 
+        :param workspace:
+            Directory where we expect to find spectrum libraries.
+        :type workspace:
+            str
+        :param fourmost_mode:
+            The name of the 4MOST mode we are operating, either hrs or lrs
+        :type fourmost_mode:
+            str
         :param rv_cross_correlation_library:
             The name of the spectrum library we are to get our cross correlation templates from.
+        :type rv_cross_correlation_library:
+            str
         :param rv_upsampling:
             The upsampling factor to apply to input spectra before cross correlating them with the templates.
+        :type rv_upsampling:
+            int
         """
         super(TaskRVCorrect, self).__init__()
         self.fourmost_mode = fourmost_mode
-        self.rv_code = RvInstanceCrossCorrelation(spectrum_library=rv_cross_correlation_library,
+
+        # Open spectrum library containing cross-correlation templates
+        template_library = SpectrumLibrarySqlite(
+            path=os_path.join(workspace, rv_cross_correlation_library),
+            create=False,
+        )
+
+        # Instantiate RV code
+        self.rv_code = RvInstanceCrossCorrelation(spectrum_library=template_library,
                                                   upsampling=rv_upsampling)
 
     def task_implementation(self, input_spectrum, spectrum_analysis):
@@ -184,9 +208,18 @@ class TaskCannonAbundanceAnalysis(PipelineTask):
         """
         return "cannon_abundance_analysis"
 
-    def __init__(self, reload_cannon_from_file):
+    def __init__(self, workspace, reload_cannon_from_file):
         """
         Instantiate a Cannon, and load training data from disk.
+
+        :param workspace:
+            Directory where we expect to find spectrum libraries.
+        :type workspace:
+            str
+        :param reload_cannon_from_file:
+            The filename of the output files containing the trained Cannon that we are to reload.
+        :type reload_cannon_from_file:
+            str
         """
 
         super(TaskCannonAbundanceAnalysis, self).__init__()
@@ -200,9 +233,21 @@ class TaskCannonAbundanceAnalysis(PipelineTask):
         with gzip.open(json_summary_filename, "rt") as f:
             summary_json = json.loads(f.read())
 
-        training_spectrum_library = summary_json['training_time']
+        training_spectrum_library_name = summary_json['train_library']
         label_names = summary_json['labels']
         censoring_masks = summary_json['censoring_mask']
+
+        # Reload training spectra
+        spectra = SpectrumLibrarySqlite.open_and_search(
+            library_spec=training_spectrum_library_name,
+            workspace=workspace,
+            extra_constraints={"continuum_normalised": 1}
+        )
+        training_library, training_library_items = [spectra[i] for i in ("library", "items")]
+
+        # Load training set
+        training_library_ids_all = [i["specId"] for i in training_library_items]
+        training_spectra_all = training_library.open(ids=training_library_ids_all)
 
         # JSON serialisation turns censoring masks from numpy arrays into tuples. Turn them back into numpy
         # arrays before passing to the Cannon
@@ -213,7 +258,7 @@ class TaskCannonAbundanceAnalysis(PipelineTask):
                                           for label, mask in censoring_masks.items()])
 
         # Instantiate the wrapper to the Cannon
-        self.cannon = CannonInstanceCaseyOld(training_set=training_spectrum_library,
+        self.cannon = CannonInstanceCaseyOld(training_set=training_spectra_all,
                                              label_names=label_names,
                                              censors=censoring_masks_numpy
                                              )
@@ -300,12 +345,21 @@ class PipelineFGK(Pipeline):
     Pipeline for FGK stars.
     """
 
-    def __init__(self, fourmost_mode, reload_cannon_from_file):
+    def __init__(self, workspace, fourmost_mode, reload_cannon_from_file):
         """
         Pipeline for processing spectra of FGK stars, for either 4MOST HRS or LRS.
+
+        :param workspace:
+            Directory where we expect to find spectrum libraries.
+        :type workspace:
+            str
         :param fourmost_mode:
             String containing either "hrs" or "lrs" indicating which 4MOST mode we are analysing.
         :type fourmost_mode:
+            str
+        :param reload_cannon_from_file:
+            The filename of the output files containing the trained Cannon that we are to reload.
+        :type reload_cannon_from_file:
             str
         """
 
@@ -322,6 +376,7 @@ class PipelineFGK(Pipeline):
                          )
         self.append_task(task_name="rv_correct",
                          task_implementation=TaskRVCorrect(
+                             workspace=workspace,
                              fourmost_mode=fourmost_mode
                          )
                          )
@@ -330,6 +385,7 @@ class PipelineFGK(Pipeline):
                          )
         self.append_task(task_name="cannon_abundance_analysis",
                          task_implementation=TaskCannonAbundanceAnalysis(
+                             workspace=workspace,
                              reload_cannon_from_file=reload_cannon_from_file
                          )
                          )

@@ -98,6 +98,8 @@ class PipelineTask:
             Optional dictionary, containing configuration parameters to pass to this task.
         """
 
+        logging.info("Initialising pipeline task <{}>".format(self.task_name()))
+
         if configuration is None:
             configuration = {}
 
