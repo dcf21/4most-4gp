@@ -14,6 +14,7 @@ import argparse
 import datetime
 import re
 import glob
+import gzip
 import json
 import pickle
 import io
@@ -50,7 +51,7 @@ args = parser.parse_args()
 @app.route("/")
 def cannon_index():
     # Fetch a list of all the Cannon runs inside this workspace
-    cannon_runs = glob.glob(os_path.join(args.path, "*.json"))
+    cannon_runs = glob.glob(os_path.join(args.path, "*.full.json.gz"))
     cannon_runs.sort()
 
     # For each library, look up how many spectra are inside it, and create a dictionary of properties
@@ -73,11 +74,17 @@ def cannon_index():
 def cannon_run(cannon):
     self_url = url_for("cannon_run", cannon=cannon)
     path_json = os_path.join(args.path, cannon)
-    path_cannon = re.sub(".json", ".cannon", path_json)
-    x = json.load(fp=open(path_json))
+    path_cannon = re.sub(".full.json.gz", ".cannon", path_json)
+    x = json.load(fp=gzip.open(path_json, "rt"))
 
-    y = pickle.load(file=open(path_cannon))
-    vectorizer_terms = enumerate(y['vectorizer'].get_human_readable_label_vector().split(' + '))
+    if not os_path.exists(path_cannon):
+        vectorizer_terms = [(0, "Error: could not find saved state of Cannon - i.e. <.cannon> file.")]
+    else:
+        try:
+            y = pickle.load(file=open(path_cannon, "rb"))
+            vectorizer_terms = enumerate(y['vectorizer'].get_human_readable_label_vector().split(' + '))
+        except UnicodeDecodeError:
+            vectorizer_terms = [(0, "Error: could not read saved state of Cannon from <.cannon> file, which seems to be corrupted. This might be because it's an old <.cannon> file which was saved by python2, and can't be reloading into python3.")]
 
     metadata = [
         {
@@ -103,13 +110,13 @@ def cannon_run(cannon):
             "value": "{:.1f} sec".format(x["training_time"])
         }, {
             "key": "Test time (per spectrum)",
-            "value": "{:.1f} sec".format((x["end_time"] - x["start_time"] - x["training_time"]) / len(x["stars"]))
+            "value": "{:.1f} sec".format((x["end_time"] - x["start_time"] - x["training_time"]) / len(x["spectra"]))
         }, {
             "key": "Test time (total)",
             "value": "{:.1f} sec".format(x["end_time"] - x["start_time"] - x["training_time"])
         }, {
             "key": "Spectrum count",
-            "value": len(x["stars"])
+            "value": len(x["spectra"])
         }, {
             "key": "Wavelength range",
             "value": "{:d}A to {:d}A".format(int(x["wavelength_raster"][0]), int(x["wavelength_raster"][-1]))
@@ -136,9 +143,9 @@ def cannon_run(cannon):
 @app.route("/coefficient_spectrum/<cannon>/<term>", methods=("GET", "POST"))
 def coefficient_spectrum(cannon, term):
     path_json = os_path.join(args.path, cannon)
-    path_cannon = re.sub(".json", ".cannon", path_json)
+    path_cannon = re.sub(".full.json.gz", ".cannon", path_json)
 
-    y = pickle.load(file=open(path_cannon))
+    y = pickle.load(file=open(path_cannon, "rb"))
     vectorizer_terms = y['vectorizer'].get_human_readable_label_vector().split(' + ')
     term_name = vectorizer_terms[int(term)]
 
@@ -169,9 +176,9 @@ def coefficient_spectrum(cannon, term):
 @app.route("/coefficient_spectrum_json/<cannon>/<term>")
 def coefficient_spectrum_json(cannon, term):
     path_json = os_path.join(args.path, cannon)
-    path_cannon = re.sub(".json", ".cannon", path_json)
+    path_cannon = re.sub(".full.json.gz", ".cannon", path_json)
 
-    y = pickle.load(file=open(path_cannon))
+    y = pickle.load(file=open(path_cannon, "rb"))
     data = list(zip(y['dispersion'], y['theta'][:, int(term)]))
     return json.dumps(data)
 
@@ -180,9 +187,9 @@ def coefficient_spectrum_json(cannon, term):
 @app.route("/coefficient_spectrum_txt/<cannon>/<term>")
 def coefficient_spectrum_txt(cannon, term):
     path_json = os_path.join(args.path, cannon)
-    path_cannon = re.sub(".json", ".cannon", path_json)
+    path_cannon = re.sub(".full.json.gz", ".cannon", path_json)
 
-    y = pickle.load(file=open(path_cannon))
+    y = pickle.load(file=open(path_cannon, "rb"))
     data = list(zip(y['dispersion'], y['theta'][:, int(term)]))
 
     txt_output = io.StringIO()
@@ -196,9 +203,9 @@ def coefficient_spectrum_txt(cannon, term):
 @app.route("/coefficient_spectrum_png/<cannon>/<term>/<lambda_min>/<lambda_max>")
 def coefficient_spectrum_png(cannon, term, lambda_min, lambda_max):
     path_json = os_path.join(args.path, cannon)
-    path_cannon = re.sub(".json", ".cannon", path_json)
+    path_cannon = re.sub(".full.json.gz", ".cannon", path_json)
 
-    y = pickle.load(file=open(path_cannon))
+    y = pickle.load(file=open(path_cannon, "rb"))
 
     fig = Figure(figsize=(16, 6))
     ax = fig.add_subplot(111)
@@ -219,7 +226,7 @@ def coefficient_spectrum_png(cannon, term, lambda_min, lambda_max):
 @app.route("/scatter_spectrum/<cannon>", methods=("GET", "POST"))
 def scatter_spectrum(cannon):
     path_json = os_path.join(args.path, cannon)
-    path_cannon = re.sub(".json", ".cannon", path_json)
+    path_cannon = re.sub(".full.json.gz", ".cannon", path_json)
 
     lambda_min = 3600
     lambda_max = 9600
@@ -247,9 +254,9 @@ def scatter_spectrum(cannon):
 @app.route("/scatter_spectrum_json/<cannon>")
 def scatter_spectrum_json(cannon):
     path_json = os_path.join(args.path, cannon)
-    path_cannon = re.sub(".json", ".cannon", path_json)
+    path_cannon = re.sub(".full.json.gz", ".cannon", path_json)
 
-    y = pickle.load(file=open(path_cannon))
+    y = pickle.load(file=open(path_cannon, "rb"))
     data = list(zip(y['dispersion'], y['s2']))
     return json.dumps(data)
 
@@ -258,9 +265,9 @@ def scatter_spectrum_json(cannon):
 @app.route("/scatter_spectrum_txt/<cannon>")
 def scatter_spectrum_txt(cannon):
     path_json = os_path.join(args.path, cannon)
-    path_cannon = re.sub(".json", ".cannon", path_json)
+    path_cannon = re.sub(".full.json.gz", ".cannon", path_json)
 
-    y = pickle.load(file=open(path_cannon))
+    y = pickle.load(file=open(path_cannon, "rb"))
     data = list(zip(y['dispersion'], y['s2']))
 
     txt_output = io.StringIO()
@@ -274,9 +281,9 @@ def scatter_spectrum_txt(cannon):
 @app.route("/scatter_spectrum_png/<cannon>/<lambda_min>/<lambda_max>")
 def scatter_spectrum_png(cannon, lambda_min, lambda_max):
     path_json = os_path.join(args.path, cannon)
-    path_cannon = re.sub(".json", ".cannon", path_json)
+    path_cannon = re.sub(".full.json.gz", ".cannon", path_json)
 
-    y = pickle.load(file=open(path_cannon))
+    y = pickle.load(file=open(path_cannon, "rb"))
 
     fig = Figure(figsize=(16, 6))
     ax = fig.add_subplot(111)
