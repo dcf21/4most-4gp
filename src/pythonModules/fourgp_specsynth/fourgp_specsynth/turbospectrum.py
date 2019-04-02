@@ -168,7 +168,7 @@ class TurboSpectrum:
                     "s": float(re_test.group(13))
                 }
             except ValueError:
-                logger.error("Could not parse MARCS model filename <{}>".format(filename))
+                logging.info("Could not parse MARCS model filename <{}>".format(filename))
                 raise
 
             # Keep a list of all of the parameter values we've seen
@@ -184,7 +184,7 @@ class TurboSpectrum:
                     dict_iter[value] = {}
                 dict_iter = dict_iter[value]
             if "filename" in dict_iter:
-                logger.info("Warning: MARCS model <{}> duplicates one we already have.".format(item))
+                logging.info("Warning: MARCS model <{}> duplicates one we already have.".format(item))
             dict_iter["filename"] = item
 
         # Sort model parameter values into order
@@ -388,12 +388,12 @@ class TurboSpectrum:
                 # Produce debugging information about how we did finding models, but only if we want to be verbose
                 if False:
                     if not failures:
-                        logger.info("Tried {}. Success.".format(model_description))
+                        logging.info("Tried {}. Success.".format(model_description))
                     else:
-                        logger.info("Tried {}. Failed on <{}>. Wanted {}, but only options were: {}.".
-                                    format(model_description, failed_on_parameter[0],
-                                           failed_on_parameter[1], failed_on_parameter[2]))
-            logger.info("Found {:d}/{:d} model atmospheres.".format(n_vertices - failures, n_vertices))
+                        logging.info("Tried {}. Failed on <{}>. Wanted {}, but only options were: {}.".
+                                     format(model_description, failed_on_parameter[0],
+                                            failed_on_parameter[1], failed_on_parameter[2]))
+            logging.info("Found {:d}/{:d} model atmospheres.".format(n_vertices - failures, n_vertices))
 
             # If there are MARCS models missing from the corners of the cuboid we tried, see which face had the most
             # corners missing, and move that face out by one grid row
@@ -428,10 +428,10 @@ class TurboSpectrum:
                                     format(parameter_to_move, options[0], options[-1],
                                            interpolate_parameters_around[parameter_to_move])
                         }
-                    logger.info("Moving lower bound of parameter <{}> from {} to {} and trying again. "
-                                "This setting previously had {} failures.".
-                                format(parameter_to_move, parameter_descriptor[0],
-                                       options[parameter_descriptor[2]], failure_count))
+                    logging.info("Moving lower bound of parameter <{}> from {} to {} and trying again. "
+                                 "This setting previously had {} failures.".
+                                 format(parameter_to_move, parameter_descriptor[0],
+                                        options[parameter_descriptor[2]], failure_count))
                     parameter_descriptor[0] = options[parameter_descriptor[2]]
                 else:
                     parameter_descriptor[3] += 1
@@ -443,10 +443,10 @@ class TurboSpectrum:
                                     format(parameter_to_move, options[0], options[-1],
                                            interpolate_parameters_around[parameter_to_move])
                         }
-                    logger.info("Moving upper bound of parameter <{}> from {} to {} and trying again. "
-                                "This setting previously had {} failures.".
-                                format(parameter_to_move, parameter_descriptor[1],
-                                       options[parameter_descriptor[3]], failure_count))
+                    logging.info("Moving upper bound of parameter <{}> from {} to {} and trying again. "
+                                 "This setting previously had {} failures.".
+                                 format(parameter_to_move, parameter_descriptor[1],
+                                        options[parameter_descriptor[3]], failure_count))
                     parameter_descriptor[1] = options[parameter_descriptor[3]]
 
         # Write configuration input for interpolator
@@ -595,8 +595,8 @@ class TurboSpectrum:
         self.counter_spectra += 1
 
         # Generate an interpolated MARCs model for requested Teff, metallicity and log_g
-        logger.info("Generating model atmosphere with T={:.1f}, log_g = {:.2f}, metallicity = {:.2f}".
-                    format(self.t_eff, self.log_g, self.metallicity))
+        logging.info("Generating model atmosphere with T={:.1f}, log_g = {:.2f}, metallicity = {:.2f}".
+                     format(self.t_eff, self.log_g, self.metallicity))
 
         atmosphere_properties = self._generate_model_atmosphere()
         if atmosphere_properties['errors']:
@@ -607,6 +607,7 @@ class TurboSpectrum:
 
         # Start making dictionary of output data
         output = atmosphere_properties
+        output["errors"] = None
         output["babsma_config"] = babsma_in
         output["bsyn_config"] = bsyn_in
 
@@ -631,13 +632,17 @@ class TurboSpectrum:
             pr1.stdin.write(bytes(babsma_in, 'utf-8'))
             stdout_bytes, stderr_bytes = pr1.communicate()
         except subprocess.CalledProcessError:
-            output["errors"] = "babsma failed"
+            output["errors"] = "babsma failed with CalledProcessError"
             return output
         finally:
             os.chdir(cwd)
         if stderr_bytes is None:
             stderr_bytes = b''
-        logger.info("{} {}".format(pr1.returncode, stderr_bytes.decode('utf-8')))
+        if pr1.returncode != 0:
+            output["errors"] = "babsma failed"
+            logging.info("Babsma failed. Return code {}. Error text <{}>".
+                         format(pr1.returncode, stderr_bytes.decode('utf-8')))
+            return output
 
         # Run bsyn. This synthesizes the spectrum
         try:
@@ -647,16 +652,19 @@ class TurboSpectrum:
             pr.stdin.write(bytes(bsyn_in, 'utf-8'))
             stdout_bytes, stderr_bytes = pr.communicate()
         except subprocess.CalledProcessError:
-            output["errors"] = "bsyn failed"
+            output["errors"] = "bsyn failed with CalledProcessError"
             return output
         finally:
             os.chdir(cwd)
         if stderr_bytes is None:
             stderr_bytes = b''
-        logger.info("{} {}".format(pr.returncode, stderr_bytes.decode('utf-8')))
+        if pr.returncode != 0:
+            output["errors"] = "bsyn failed"
+            logging.info("Bsyn failed. Return code {}. Error text <{}>".
+                         format(pr.returncode, stderr_bytes.decode('utf-8')))
+            return output
 
         # Return output
         output["return_code"] = pr.returncode
-        output["errors"] = None
         output["output_file"] = os_path.join(self.tmp_dir, "spectrum_{:08d}.spec".format(self.counter_spectra))
         return output
