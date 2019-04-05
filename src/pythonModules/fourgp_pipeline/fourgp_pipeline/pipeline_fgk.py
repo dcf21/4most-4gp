@@ -9,15 +9,70 @@ determining RVs, or continuum normalising spectra.
 
 import gzip
 import json
+import logging
 from os import path as os_path
 
 import numpy as np
 from fourgp_cannon.cannon_wrapper_casey_old import CannonInstanceCaseyOld
+from fourgp_degrade import SpectrumProperties, SpectrumResampler
 from fourgp_rv import RvInstanceCrossCorrelation
 from fourgp_speclib import SpectrumLibrarySqlite
 
 from .dummy_processes import ContinuumNormalisationDummy, DecisionMakerDummy
 from .pipeline import Pipeline, PipelineTask, PipelineFailure
+
+
+class TaskCleanUpNans(PipelineTask):
+    """
+    Task to make sure the spectrum doesn't have any NaNs in it, as these cause numerical interpolation to fail.
+    """
+
+    @staticmethod
+    def task_name():
+        """
+        :return:
+            Name for this pipeline task.
+        """
+        return "clean_up_nans"
+
+    def __init__(self):
+        """
+        No initialisation required.
+        """
+
+        super(TaskCleanUpNans, self).__init__()
+
+    def task_implementation(self, input_spectrum, spectrum_analysis):
+        """
+        Task to make sure the spectrum doesn't have any NaNs in it, as these cause numerical interpolation to fail.
+
+        :param input_spectrum:
+            The Spectrum object we are to continuum normalise.
+        :type input_spectrum:
+            Spectrum
+        :param spectrum_analysis:
+            Structure containing the results of the analysis of the spectrum so far.
+        :type spectrum_analysis:
+            SpectrumAnalysis
+        :return:
+            The continuum-normalised spectrum.
+        """
+
+        output_spectrum = input_spectrum.copy()
+
+        # Replace errors which are nans with a large value, otherwise they cause numerical failures in the RV code
+        output_spectrum.value_errors[np.isnan(output_spectrum.value_errors)] = 1000.
+
+        # Check for NaNs in actual spectrum
+        if not np.all(np.isfinite(output_spectrum.values)):
+            logging.warning("Warning: NaN values in test spectrum!")
+            output_spectrum.value_errors[np.isnan(output_spectrum.values)] = 1000.
+            output_spectrum.values[np.isnan(output_spectrum.values)] = 1.
+
+        return {
+            'spectrum': output_spectrum,
+            'metadata': {}
+        }
 
 
 class TaskContinuumNormalisationFirstPass(PipelineTask):
@@ -135,11 +190,14 @@ class TaskRVCorrect(PipelineTask):
 
         rv_mean, rv_std_dev, stellar_parameters, rv_estimates_by_weight = self.rv_code.estimate_rv(
             input_spectrum=input_spectrum,
-            mode=self.fourmost_mode
+            mode=self.fourmost_mode.upper()
         )
 
+        spectrum_object_rest_frame = input_spectrum.correct_radial_velocity(v=rv_mean)
+        resampler = SpectrumResampler(input_spectrum=spectrum_object_rest_frame)
+
         return {
-            'spectrum': input_spectrum.apply_rv(rv=rv_mean),
+            'spectrum': resampler.match_to_other_spectrum(other=input_spectrum),
             'metadata': {
                 'rv': rv_mean,
                 'rv_uncertainty': rv_std_dev,
@@ -225,43 +283,24 @@ class TaskCannonAbundanceAnalysis(PipelineTask):
         super(TaskCannonAbundanceAnalysis, self).__init__()
 
         # Load the JSON data that summarises the Cannon training that we're about to reload
-        # We need the JSON data as well as the pickle that Andy Casey's code saves, as this contains information
-        # such as the censoring masks which we need to reproduce. It also makes this code immune to the detail that Andy
-        # Casey's various versions of the Cannon save their training data in incompatible formats.
         json_summary_filename = "{}.summary.json.gz".format(reload_cannon_from_file)
+        cannon_pickle_filename = "{}.cannon".format(reload_cannon_from_file)
 
         with gzip.open(json_summary_filename, "rt") as f:
             summary_json = json.loads(f.read())
 
-        training_spectrum_library_name = summary_json['train_library']
-        label_names = summary_json['labels']
-        censoring_masks = summary_json['censoring_mask']
+        raster = np.array(summary_json['wavelength_raster'])
+        test_labels = summary_json['labels']
 
-        # Reload training spectra
-        spectra = SpectrumLibrarySqlite.open_and_search(
-            library_spec=training_spectrum_library_name,
-            workspace=workspace,
-            extra_constraints={"continuum_normalised": 1}
-        )
-        training_library, training_library_items = [spectra[i] for i in ("library", "items")]
+        # If we're doing our own continuum normalisation, we need to treat each wavelength arm separately
+        wavelength_arm_breaks = SpectrumProperties(raster).wavelength_arms()['break_points']
 
-        # Load training set
-        training_library_ids_all = [i["specId"] for i in training_library_items]
-        training_spectra_all = training_library.open(ids=training_library_ids_all)
-
-        # JSON serialisation turns censoring masks from numpy arrays into tuples. Turn them back into numpy
-        # arrays before passing to the Cannon
-        if censoring_masks is None:
-            censoring_masks_numpy = None
-        else:
-            censoring_masks_numpy = dict([(label, np.array(mask))
-                                          for label, mask in censoring_masks.items()])
-
-        # Instantiate the wrapper to the Cannon
-        self.cannon = CannonInstanceCaseyOld(training_set=training_spectra_all,
-                                             label_names=label_names,
-                                             censors=censoring_masks_numpy
-                                             )
+        self.model = CannonInstanceCaseyOld(training_set=None,
+                                            wavelength_arms=wavelength_arm_breaks,
+                                            load_from_file=cannon_pickle_filename,
+                                            label_names=test_labels,
+                                            censors=None
+                                            )
 
     def task_implementation(self, input_spectrum, spectrum_analysis):
         """
@@ -280,7 +319,7 @@ class TaskCannonAbundanceAnalysis(PipelineTask):
         """
 
         # Pass spectrum to the Cannon
-        labels, cov, meta = self.cannon.fit_spectrum(spectrum=input_spectrum)
+        labels, cov, meta = self.model.fit_spectrum(spectrum=input_spectrum)
 
         # Check whether Cannon failed
         if labels is None:
@@ -373,6 +412,9 @@ class PipelineFGK(Pipeline):
         # Create pipeline, step by step
         self.append_task(task_name="continuum_normalise_pass_1",
                          task_implementation=TaskContinuumNormalisationFirstPass()
+                         )
+        self.append_task(task_name="clean_up_nans",
+                         task_implementation=TaskCleanUpNans()
                          )
         self.append_task(task_name="rv_correct",
                          task_implementation=TaskRVCorrect(

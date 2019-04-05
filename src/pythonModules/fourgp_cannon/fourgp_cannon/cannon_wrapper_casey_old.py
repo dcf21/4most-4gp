@@ -22,8 +22,6 @@ except ImportError:
 import fourgp_speclib
 from fourgp_degrade import SpectrumResampler
 
-logger = logging.getLogger(__name__)
-
 
 class CannonInstanceCaseyOld(object):
     """
@@ -71,76 +69,91 @@ class CannonInstanceCaseyOld(object):
         self._debugging_output_counter = 0
         self._debugging = debugging
         self.cannon_version = tc.__version__
-        self._wavelength_arms = wavelength_arms
-        logger.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
-
-        assert isinstance(training_set, fourgp_speclib.SpectrumArray), \
-            "Training set for the Cannon should be a SpectrumArray."
-
-        # Hook for normalising input spectra
-        training_set = self.normalise(training_set)
-
-        self._training_set = training_set
         self._progress_bar = progress_bar
+        self._training_set = None
 
         # Work out how many CPUs we should allow the Cannon to use
         if threads is None:
             threads = cpu_count()
 
-        # Turn error bars on fluxes into inverse variances
-        inverse_variances = training_set.value_errors ** (-2)
+        self._wavelength_arms = wavelength_arms
+        logging.info("Wavelength arm breakpoints: {}".format(self._wavelength_arms))
 
-        # Flag bad data points
-        ignore = (training_set.values < 0) + ~np.isfinite(inverse_variances)
-        inverse_variances[ignore] = 0
-        training_set.values[ignore] = 1
+        # See if we're reloading a previously saved Cannon
+        reloading_cannon = load_from_file is not None
 
-        # Check that labels are correctly set in metadata
-        for index in range(len(training_set)):
-            metadata = training_set.get_metadata(index)
-            for label in label_names:
-                assert label in metadata, "Label <{}> not set on training spectrum number {}. " \
-                                          "Labels on this spectrum are: {}.".format(
-                    label, index, ", ".join(list(metadata.keys())))
-                assert np.isfinite(metadata[label]), "Label <{}> is not finite on training spectrum number {}. " \
-                                                     "Labels on this spectrum are: {}.".format(
-                    label, index, metadata)
+        # Tasks to do if we're training a new Cannon from scratch
+        if not reloading_cannon:
+            assert isinstance(training_set, fourgp_speclib.SpectrumArray), \
+                "Training set for the Cannon should be a SpectrumArray."
 
-        # Compile table of training values of labels from metadata contained in SpectrumArray
-        training_label_values = Table(names=label_names,
-                                      rows=[[training_set.get_metadata(index)[label] for label in label_names]
-                                            for index in range(len(training_set))])
+            # Hook for normalising input spectra
+            training_set = self.normalise(training_set)
 
-        self._model = tc.L1RegularizedCannonModel(labelled_set=training_label_values,
-                                                  normalized_flux=training_set.values,
-                                                  normalized_ivar=inverse_variances,
-                                                  dispersion=training_set.wavelengths,
-                                                  threads=threads)
+            self._training_set = training_set
 
-        self._model.vectorizer = tc.vectorizer.NormalizedPolynomialVectorizer(
-            labelled_set=training_label_values,
-            terms=tc.vectorizer.polynomial.terminator(label_names, polynomial_order)
-        )
+            # Turn error bars on fluxes into inverse variances
+            inverse_variances = training_set.value_errors ** (-2)
 
-        if censors is not None:
-            self._model.censors = censors
+            # Flag bad data points
+            ignore = (training_set.values < 0) + ~np.isfinite(inverse_variances)
+            inverse_variances[ignore] = 0
+            training_set.values[ignore] = 1
 
-        self._model.s2 = 0
-        self._model.regularization = 0
+            # Check that labels are correctly set in metadata
+            for index in range(len(training_set)):
+                metadata = training_set.get_metadata(index)
+                for label in label_names:
+                    assert label in metadata, "Label <{}> not set on training spectrum number {}. " \
+                                              "Labels on this spectrum are: {}.".format(
+                        label, index, ", ".join(list(metadata.keys())))
+                    assert np.isfinite(metadata[label]), "Label <{}> is not finite on training spectrum number {}. " \
+                                                         "Labels on this spectrum are: {}.".format(
+                        label, index, metadata)
 
-        if load_from_file is None:
-            logger.info("Starting to train the Cannon")
+            # Compile table of training values of labels from metadata contained in SpectrumArray
+            training_label_values = Table(names=label_names,
+                                          rows=[[training_set.get_metadata(index)[label] for label in label_names]
+                                                for index in range(len(training_set))])
+
+            self._model = tc.L1RegularizedCannonModel(labelled_set=training_label_values,
+                                                      normalized_flux=training_set.values,
+                                                      normalized_ivar=inverse_variances,
+                                                      dispersion=training_set.wavelengths,
+                                                      threads=threads)
+
+            self._model.vectorizer = tc.vectorizer.NormalizedPolynomialVectorizer(
+                labelled_set=training_label_values,
+                terms=tc.vectorizer.polynomial.terminator(label_names, polynomial_order)
+            )
+
+            if censors is not None:
+                self._model.censors = censors
+
+            self._model.s2 = 0
+            self._model.regularization = 0
+
+            logging.info("Starting to train the Cannon")
             self._model.train(
                 progressbar=self._progress_bar,
                 op_kwargs={'xtol': tolerance, 'ftol': tolerance},
                 op_bfgs_kwargs={}
             )
-            logger.info("Cannon training completed")
+            self._model._set_s2_by_hogg_heuristic()
+            logging.info("Cannon training completed")
+
+        # Tasks to do if we're reloading a previously trained Cannon from disk
         else:
-            logger.info("Loading Cannon from disk")
+            logging.info("Loading Cannon from disk")
+            self._model = tc.L1RegularizedCannonModel(labelled_set=None,
+                                                      normalized_flux=None,
+                                                      normalized_ivar=None,
+                                                      threads=threads)
             self._model.load(filename=load_from_file)
-            logger.info("Cannon loaded successfully")
-        self._model._set_s2_by_hogg_heuristic()
+            logging.info("Cannon loaded successfully")
+
+        self._raster = self._model.dispersion
+        self._raster_hash = fourgp_speclib.hash_numpy_array(self._raster)
 
     def fit_spectrum(self, spectrum):
         """
@@ -158,7 +171,7 @@ class CannonInstanceCaseyOld(object):
         assert isinstance(spectrum, fourgp_speclib.Spectrum), \
             "Supplied spectrum for the Cannon to fit is not a Spectrum object."
 
-        assert spectrum.raster_hash == self._training_set.raster_hash, \
+        assert spectrum.raster_hash == self._raster_hash, \
             "Supplied spectrum for the Cannon to fit is not sampled on the same raster as the training set."
 
         # Hook for normalising input spectra
@@ -457,7 +470,7 @@ class CannonInstanceCaseyOldWithContinuumNormalisation(CannonInstanceCaseyOld):
         assert isinstance(spectrum, fourgp_speclib.Spectrum), \
             "Supplied spectrum for the Cannon to fit is not a Spectrum object."
 
-        assert spectrum.raster_hash == self._training_set.raster_hash, \
+        assert spectrum.raster_hash == self._raster_hash, \
             "Supplied spectrum for the Cannon to fit is not sampled on the same raster as the training set."
 
         if self._debugging:
@@ -490,7 +503,7 @@ class CannonInstanceCaseyOldWithContinuumNormalisation(CannonInstanceCaseyOld):
                 pixel_mask = (arm_raster * continuum_mask *
                               np.isfinite(spectrum.value_errors) * (spectrum.value_errors > 0)
                               )
-                # logger.info("Continuum pixels in arm {}: {} / {}".format(i, sum(pixel_mask), len(pixel_mask)))
+                # logging.info("Continuum pixels in arm {}: {} / {}".format(i, sum(pixel_mask), len(pixel_mask)))
                 continuum_raster = raster[pixel_mask]
                 continuum_values = spectrum.values[pixel_mask]
                 continuum_value_errors = spectrum.value_errors[pixel_mask]
@@ -500,7 +513,7 @@ class CannonInstanceCaseyOldWithContinuumNormalisation(CannonInstanceCaseyOld):
                                                              values=continuum_values,
                                                              value_errors=continuum_value_errors,
                                                              )
-                # logger.info("Continuum spectrum length: {}".format(len(continuum_spectrum)))
+                # logging.info("Continuum spectrum length: {}".format(len(continuum_spectrum)))
 
                 # Fit a smooth function through these pixels
                 continuum_model_factory = fourgp_speclib.SpectrumSmoothFactory(
@@ -513,10 +526,10 @@ class CannonInstanceCaseyOldWithContinuumNormalisation(CannonInstanceCaseyOld):
                 )
 
                 if isinstance(continuum_smooth, str):
-                    logger.info(continuum_smooth)
+                    logging.info(continuum_smooth)
                     return None, None, None, None, None, None
 
-                # logger.info("Best-fit polynomial coefficients: {}".format(continuum_smooth.coefficients))
+                # logging.info("Best-fit polynomial coefficients: {}".format(continuum_smooth.coefficients))
 
                 # Resample smooth function onto the full raster of pixels within this wavelength arm
                 resampler = SpectrumResampler(input_spectrum=continuum_smooth)
@@ -539,8 +552,8 @@ class CannonInstanceCaseyOldWithContinuumNormalisation(CannonInstanceCaseyOld):
 
             # Make new model of which pixels are continuum (based on Cannon's template being close to one)
             continuum_mask = (model.values > 0.99) * (model.values < 1.01)
-            logger.info("Continuum pixels: {} / {}".format(sum(continuum_mask), len(continuum_mask)))
-            logger.info("Best-fit labels: {}".format(list(labels[0])))
+            logging.info("Continuum pixels: {} / {}".format(sum(continuum_mask), len(continuum_mask)))
+            logging.info("Best-fit labels: {}".format(list(labels[0])))
 
             # Produce debugging output if requested
             if self._debugging:

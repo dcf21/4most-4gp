@@ -86,12 +86,12 @@ class PipelineManager:
         # Query whether we have any work to do
         job_description = self.fetch_work()
 
+        # If we have no work to do, exit immediately
+        if job_description is None:
+            return 0
+
         input_spectrum = job_description['spectrum']
         spectrum_identifier = job_description['spectrum_identifier']
-
-        # If we have no work to do, exit immediately
-        if job is None:
-            return 0
 
         # If we got a spectrum, analyse it now
         analysis = self.pipeline.analyse_spectrum(input_spectrum=input_spectrum,
