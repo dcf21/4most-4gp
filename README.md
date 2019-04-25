@@ -1,3 +1,5 @@
+**Please note that this is Dominic Ford's personal copy of the 4GP code. It is basically a frozen copy of how the code stood in April 2019, when Dominic stopped working for 4MOST. The up-to-date code is in the official 4MOST IWG7 repository here: [https://github.com/4most-iwg7/4most-4gp](https://github.com/4most-iwg7/4most-4gp)**
+
 The text on this page is a brief introduction to `4most-4gp`. For a more
 complete tutorial, please visit the
 [Wiki](https://github.com/dcf21/4most-4gp/wiki).
