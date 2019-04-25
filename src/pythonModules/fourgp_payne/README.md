@@ -4,9 +4,9 @@ This package provides a simple wrapper for passing spectra in SpectrumLibraries 
 
 It requires that you have installed pytorch in the python virtual environment you are using.
 
-At the time of writing their are various different versions of the Payne. This version is an edited version of Phillip Cargile's version from GitHub:
+At the time of writing there are various different versions of the Payne. This is a lightly edited copy of Yuan-Sen Ting's version, as used in the paper <https://arxiv.org/abs/1804.01530>
 
-https://github.com/pacargile/ThePayne
+Yuan-Sen's GitHub repository is here: <https://github.com/tingyuansen/The_Payne>
 
 
 # Contact details
